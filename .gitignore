@@ -1,0 +1,41 @@
+# ---- SECRETS ----
+.env
+.env.*
+!.env.example
+
+# ---- PYTHON ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# ---- VIRTUAL ENVS ----
+.venv/
+venv/
+env/
+
+# ---- TOOLS CACHE ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- LOGS ----
+logs/
+*.log
+*.log.*
+
+# ---- DOCKER VOLUMES ----
+/pgdata/
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.swp
+
+# ---- OS ----
+.DS_Store
