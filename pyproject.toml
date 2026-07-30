@@ -1,0 +1,12 @@
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = "migration.versions.*"
+ignore_errors = true

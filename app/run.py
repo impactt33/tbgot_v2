@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher
 
 from core.config import settings, setup_logging
-from main.presentation.handlers import command_router, callback_router, message_router
+from main.presentation.handlers import command_router, callback_router, message_router, error_router
 
 
 async def main() -> None:
@@ -15,6 +15,7 @@ async def main() -> None:
     bot = Bot(token=settings.BOT_TOKEN)
     dp = Dispatcher()
 
+    dp.include_router(error_router)
     dp.include_router(command_router)
     dp.include_router(callback_router)
     dp.include_router(message_router)

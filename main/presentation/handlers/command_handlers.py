@@ -17,16 +17,19 @@ logger = logging.getLogger(__name__)
 
 @command_router.message(CommandStart())
 async def command_start(message: types.Message, user_service: UserService = UserServiceImpl(user_repo=UserRepoImpl())):
-    logger.info(f"User {message.from_user.id} started command")
+    logger.debug(f"User {message.from_user.id} started command")
 
-    await user_service.register_user(
+    new_user = await user_service.get_or_create_user(
         UserCreateEntity(
             telegram_id = message.from_user.id,
             username = message.from_user.username
         )
     )
 
-    await message.answer(f"Welcome, {message.from_user.username}!")
+    if new_user.was_created:
+        await message.answer(f"Welcome, {message.from_user.username}!")
+    else:
+        await message.answer("Welcome back!")
 
 @command_router.message(Command("admin"))
 async def command_admin(message: types.Message, state: FSMContext, user_service: UserService = UserServiceImpl(user_repo=UserRepoImpl())):
@@ -39,7 +42,4 @@ async def command_admin(message: types.Message, state: FSMContext, user_service:
         return
 
     await state.set_state(AdminProvideRightsState.contact)
-
-    logger.debug(f"Current state: {await state.get_state()}")
-
     await message.answer(f"Send the contact of any user to provide rights for him.")

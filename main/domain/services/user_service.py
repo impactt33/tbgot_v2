@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 
 from main.data.enums import UserRole
-from main.domain.entities import UserCreateEntity, UserEntity
+from main.domain.entities import UserCreateEntity, UserEntity, NewUserEntity
 
 
 class UserService(ABC):
     @abstractmethod
-    async def register_user(self, user_entity: UserCreateEntity) -> None:
+    async def get_or_create_user(self, user_create_entity: UserCreateEntity) -> NewUserEntity:
         ...
 
     @abstractmethod
@@ -18,5 +18,9 @@ class UserService(ABC):
         ...
 
     @abstractmethod
-    async def change_user_role(self, telegram_id: int, new_role: UserRole) -> None:
+    async def change_user_role(self, actor_telegram_id: int, target_telegram_id: int, new_role: UserRole) -> UserEntity:
+        ...
+
+    @abstractmethod
+    async def is_admin(self, telegram_id: int) -> bool:
         ...

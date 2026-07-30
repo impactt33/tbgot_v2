@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
 from main.data.enums import UserRole
+from main.domain.entities import UserEntity
 
 
 class User(Base):
@@ -18,7 +19,7 @@ class User(Base):
         unique=True,
         index=True
     )
-    username: Mapped[str] = mapped_column(String(63))
+    username: Mapped[str | None] = mapped_column(String(63))
     role: Mapped[UserRole] = mapped_column(
         default=UserRole.NONE,
         server_default=text("'NONE'")
@@ -34,3 +35,24 @@ class User(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    def to_entity(self) -> UserEntity:
+        return UserEntity(
+            id=self.id,
+            telegram_id=self.telegram_id,
+            username=self.username,
+            role=self.role,
+            created_at=self.created_at,
+            updated_at=self.updated_at
+        )
+
+    @classmethod
+    def from_entity(cls, entity: UserEntity) -> User:
+        return cls(
+            id=entity.id,
+            telegram_id=entity.telegram_id,
+            username=entity.username,
+            role=entity.role,
+            created_at=entity.created_at,
+            updated_at=entity.updated_at
+        )

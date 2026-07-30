@@ -1,3 +1,3 @@
 from .user_errors import *
 
-__all__ = ["UserAlreadyExistsError", "UserNotFountError"]
+__all__ = ["UserAlreadyExistsError", "UserNotFountError", "CannotChangeOwnRoleError"]

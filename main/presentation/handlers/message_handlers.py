@@ -2,7 +2,6 @@ import logging
 
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from pyasn1.codec.ber.decoder import stStop
 
 from main.data.repositories_impl import UserRepoImpl
 from main.domain.services import UserService

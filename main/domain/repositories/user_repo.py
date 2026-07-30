@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from main.data.enums import UserRole
-from main.domain.entities import UserCreateEntity, UserEntity
+from main.domain.entities import UserCreateEntity, UserEntity, NewUserEntity
 
 
 class UserRepo(ABC):
@@ -14,9 +14,13 @@ class UserRepo(ABC):
         ...
 
     @abstractmethod
-    async def register_user(self, user: UserCreateEntity) -> None:
+    async def get_or_create_user(self, user: UserCreateEntity) -> NewUserEntity:
         ...
 
     @abstractmethod
-    async def change_user_role(self, telegram_id: int, new_role: UserRole) -> None:
+    async def change_user_role(self, telegram_id: int, new_role: UserRole) -> UserEntity | None:
+        ...
+
+    @abstractmethod
+    async def is_admin(self, telegram_id: int) -> bool:
         ...

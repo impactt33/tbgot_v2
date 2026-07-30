@@ -1,12 +1,12 @@
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database.session import connection
 from main.data.enums import UserRole
 from main.data.models import User
 from main.domain.entities import UserCreateEntity
-from main.domain.entities.user_entity import UserEntity
-from main.domain.errors import UserNotFountError
+from main.domain.entities.user_entity import UserEntity, NewUserEntity
 from main.domain.repositories import UserRepo
 
 
@@ -34,27 +34,43 @@ class UserRepoImpl(UserRepo):
         return user
 
     @connection
-    async def register_user(self, user_entity: UserCreateEntity, session: AsyncSession) -> None:
-        user = User(
-            telegram_id=user_entity.telegram_id,
-            username=user_entity.username
+    async def get_or_create_user(self, user_entity: UserCreateEntity, session: AsyncSession) -> NewUserEntity:
+        query = (
+            insert(User)
+            .values(telegram_id=user_entity.telegram_id, username=user_entity.username)
+            .on_conflict_do_nothing(index_elements=["telegram_id"])
+            .returning(User)
         )
 
-        session.add(user)
+        user = await session.scalar(query)
+        created = user is not None
+
+        if not created:
+            user = await session.scalar(
+                select(User).where(User.telegram_id == user_entity.telegram_id)
+            )
+
         await session.commit()
+        return NewUserEntity(user.to_entity(), created)
 
     @connection
-    async def change_user_role(self, telegram_id: int, new_role: UserRole, session: AsyncSession) -> None:
+    async def change_user_role(self, telegram_id: int, new_role: UserRole, session: AsyncSession) -> UserEntity | None:
         query = (
             update(User)
             .where(User.telegram_id == telegram_id)
             .values(role=new_role)
-            .returning(User.id)
+            .returning(User)
         )
-
-        result = await session.scalar(query)
-
-        if result is None:
-            raise UserNotFountError()
+        user = await session.scalar(query)
 
         await session.commit()
+
+        return user.to_entity() if user is not None else None
+
+    @connection
+    async def is_admin(self, telegram_id: int, session: AsyncSession) -> bool:
+        user = await session.get(User, telegram_id)
+
+        await session.commit()
+
+        return User.role == UserRole.ADMIN if user is not None else False
