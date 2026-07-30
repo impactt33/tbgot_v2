@@ -2,6 +2,7 @@ import logging
 
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
+from dishka import FromDishka
 
 from main.data.repositories_impl import UserRepoImpl
 from main.domain.services import UserService
@@ -14,7 +15,7 @@ message_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
 
 @message_router.message(AdminProvideRightsState.contact, F.contact)
-async def message_contact_handler(message: types.Message, state: FSMContext, user_service: UserService = UserServiceImpl(user_repo=UserRepoImpl())):
+async def message_contact_handler(message: types.Message, state: FSMContext, user_service: FromDishka[UserService]):
     contact = message.contact
 
     user = await user_service.get_by_telegram_id(contact.user_id)

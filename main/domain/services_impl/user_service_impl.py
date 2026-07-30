@@ -39,4 +39,4 @@ class UserServiceImpl(UserService):
         return user
 
     async def is_admin(self, telegram_id: int) -> bool:
-        pass
+        return await self.user_repo.is_admin(telegram_id)
