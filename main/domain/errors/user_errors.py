@@ -12,7 +12,7 @@ class UserNotFoundError(UserError):
         self.username = username
         super().__init__(f"User not found (telegram_id={telegram_id!r}, username={username!r})")
 
-class UserAlreadyExistsError(AppError):
+class UserAlreadyExistsError(UserError):
     user_message = "User already exists."
 
     def __init__(self, telegram_id: int | None = None, username: str | None = None):
@@ -23,5 +23,5 @@ class UserAlreadyExistsError(AppError):
 class AccessDeniedError(UserError):
     user_message = "You have not required rights. Access denied."
 
-class CannotChangeOwnRoleError(AppError):
+class CannotChangeOwnRoleError(UserError):
     user_message = "Cannot change own role. You can lose admin rights."

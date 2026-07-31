@@ -5,9 +5,9 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from dishka import FromDishka
 
-from main.data.enums import UserRole
 from main.domain.entities import UserCreateEntity
 from main.domain.services import UserService
+from main.presentation.keyboards import choose_action_admin_keyboard
 from main.presentation.states import AdminProvideRightsState
 
 command_router = Router(name = __name__)
@@ -40,8 +40,10 @@ async def command_admin(message: types.Message, state: FSMContext, user_service:
         await message.answer(f"Oops, you don't have permission to do that.")
         return
 
-    await state.set_state(AdminProvideRightsState.contact)
-    await message.answer(f"Send the contact of any user to provide rights for him.")
+    await message.answer(
+        f"Welcome, {message.from_user.username}! Choose action to continue:",
+        reply_markup=choose_action_admin_keyboard
+    )
 
 @command_router.message(Command("self_info"))
 async def command_self_info(message: types.Message, user_service: FromDishka[UserService]):

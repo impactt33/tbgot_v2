@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from main.data.enums import UserRole
+from main.domain.enums import UserRole
 from main.domain.entities import UserCreateEntity, UserEntity, NewUserEntity
 
 

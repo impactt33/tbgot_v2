@@ -1,41 +1,34 @@
 import logging
+from typing import TypeVar
 
 from google import genai
 from google.genai import types
-from tenacity import retry_unless_exception_type
+from pydantic import BaseModel
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed, wait_exponential
 
 from main.domain.clients import AIClient
 
 logger = logging.getLogger(__name__)
 
-class GeminiAIClient(AIClient[list[types.Content]]):
+TModel = TypeVar("TModel", bound=BaseModel)
+
+class GeminiGenerateConfig(BaseModel):
+    system_instruction: str | None = None
+    response_mime_type: str = "plain/text"
+    response_schema: BaseModel | None = None
+    max_output_tokens: int = 4096
+    thinking_config: types.ThinkingConfig = types.ThinkingConfig(thinking_budget=0)
+
+
+class GeminiAIClient(AIClient):
     def __init__(self, api_key: str):
         self.client = genai.Client(
             api_key=api_key,
             http_options={"base_url": "https://api.proxyapi.ru/google"}  # type: ignore
         )
 
-    async def _generate_content(self, parts: list[types.Part], json_mode: bool) -> types.GenerateContentResponse:
-        try:
-            response = await self.client.aio.models.generate_content( # TODO: create GenerateContentConfigDict
-                model="gemini-2.5-flash-lite",
-                contents=[
-                    types.Content(role="user", parts=parts) # TODO: add history
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction="",
-                    response_mime_type="application/json" if json_mode else "text/plain",
-                    max_output_tokens=2048
-                )
-            )
-        except Exception:
-            logger.error(f"Gemini request failed")
-            raise
-
-        return response
-
     @staticmethod
-    async def process_to_history(history: list[str]) -> list[types.Content]:
+    def process_to_history(history: list[str]) -> list[types.Content]:
         gemini_history = []
 
         if history is None:
@@ -52,37 +45,76 @@ class GeminiAIClient(AIClient[list[types.Content]]):
 
         return gemini_history
 
-    async def ask_text(
+    @retry(
+        retry=retry_if_exception_type((TimeoutError, ConnectionError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10)
+    )
+    async def _generate_content(
         self,
-        user_message: str,
-        json_mode: bool = False
-    ):
-        parts = [types.Part(text=user_message)]
+        content: list[types.Content],
+        generate_config: types.GenerateContentConfig
+    ) -> types.GenerateContentResponse | None:
+        try:
+            response = await self.client.aio.models.generate_content( # TODO: create GenerateContentConfigDict
+                model="gemini-2.5-flash-lite",
+                contents=content,
+                config=generate_config
+            )
+        except Exception as exc:
+            logger.exception("Failed to generate content: %s", exc)
+            return None
 
-        response = await self._generate_content(parts, json_mode)
+        return response
 
-        text = response.text
-
-        # TODO: processing history
-
-        return text
-
-    async def ask_image(
+    async def ask_structured(
         self,
-        user_message: str,
-        images_bytes: list[bytes],
-        json_mode: bool = False,
-        mime_type: str = "image/jpeg"
-    ):
-        parts = [types.Part(text=user_message)]
+        prompt: str,
+        schema: type[TModel],
+        *,
+        system: str | None = None
+    ) -> TModel | None:
+        generate_config = GeminiGenerateConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            response_schema=schema,
+            max_output_tokens=4096,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        )
 
-        for image_bytes in images_bytes:
-            parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+        content = self.process_to_history([prompt])
+        config = types.GenerateContentConfig(**generate_config.model_dump())
 
-        response = await self._generate_content(parts, json_mode)
+        response = await self._generate_content(content, config)
 
-        text = response.text
+        if response is None:
+            logger.exception("Gemini request failed")
+            return response
 
-        # TODO: processing history
+        parsed = response.parsed
+        if not isinstance(parsed, schema):
+            logger.exception("Gemini returned unprocessable payload: %s", parsed)
 
-        return text
+        return parsed
+
+    async def ask_text(self, prompt: str, *, system: str | None = None) -> str | None:
+        generate_config = GeminiGenerateConfig(
+            system_instruction=system,
+            response_mime_type="text/plain",
+            max_output_tokens=2048,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        )
+
+        content = self.process_to_history([prompt])
+        config = types.GenerateContentConfig(**generate_config.model_dump())
+
+        response = await self._generate_content(content, config)
+
+        if response is None:
+            logger.exception("Gemini request failed")
+            return response
+
+        return response.text
+
+    async def ask_image(self, prompt: str, images: list[bytes], *, mime_type: str = "image/jpeg") -> str | None:
+        ...

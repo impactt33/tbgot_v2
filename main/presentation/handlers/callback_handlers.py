@@ -3,17 +3,33 @@ import logging
 from aiogram import Router, F, Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery
 from dishka import FromDishka
 
-from main.data.enums import UserRole
-from main.data.repositories_impl import UserRepoImpl
+from main.domain.enums import UserRole
 from main.domain.services import UserService
-from main.domain.services_impl import UserServiceImpl
+from main.presentation.keyboards import choose_channel_keyboard
+from main.presentation.states import AdminAddChannelState, AdminProvideRightsState
 
 callback_router = Router(name=__name__)
 
 logger = logging.getLogger(__name__)
+
+@callback_router.callback_query(F.data.startswith("admin_action_"))
+async def choose_admin_action(callback: CallbackQuery, state: FSMContext):
+    admin_action = callback.data.removeprefix("admin_action_")
+
+    match admin_action:
+        case "provide_rights":
+            await state.set_state(AdminProvideRightsState.contact)
+            await callback.answer()
+            await callback.message.edit_text("Send the contact of any user to provide rights for him.")
+        case "add_channels":
+            await state.set_state(AdminAddChannelState.waiting_for_channel)
+            await callback.answer()
+            await callback.message.answer("Pick channels to add.", reply_markup=choose_channel_keyboard)
+        case _:
+            pass
 
 @callback_router.callback_query(F.data.startswith("provide_role_"))
 async def provide_role_callback(callback: CallbackQuery, bot: Bot, state: FSMContext, user_service: FromDishka[UserService]):

@@ -1,4 +1,4 @@
-from main.data.enums import UserRole
+from main.domain.enums import UserRole
 from main.domain.entities import UserEntity, UserCreateEntity, NewUserEntity
 from main.domain.errors.user_errors import *
 from main.domain.repositories import UserRepo

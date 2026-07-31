@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import BigInteger, String, text, Integer, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
-from main.data.enums import UserRole
+from main.domain.enums import UserRole
 from main.domain.entities import UserEntity
 
 
 class User(Base):
+    __tablename__ = "users"
+
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,

@@ -1,18 +1,19 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
-T = TypeVar("T")
+from pydantic import BaseModel
 
-class AIClient(ABC, Generic[T]):
-    @staticmethod
+TModel = TypeVar("TModel", bound=BaseModel)
+
+class AIClient(ABC):
     @abstractmethod
-    async def process_to_history(history: list[str]) -> T:
+    async def ask_text(self, prompt: str, *, system: str | None = None) -> str | None:
         ...
 
     @abstractmethod
-    async def ask_text(self, user_message: str, json_mode: bool = False) -> str:
+    async def ask_structured(self, prompt: str, shema: type[TModel], *, system: str | None = None) -> TModel | None:
         ...
 
     @abstractmethod
-    async def ask_image(self, user_message: str, images_bytes: list[bytes], json_mode: bool = False) -> str:
+    async def ask_image(self, prompt: str, images: list[bytes], *, mime_type: str = "image/jpeg") -> str | None:
         ...

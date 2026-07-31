@@ -1,4 +1,5 @@
 from .user_model import User
-from .existing_post_model import ExistingPost
+from .channel_model import Channel
+from .quiz_topic_model import QuizTopic
 
-__all__ = ["User", "ExistingPost"]
+__all__ = ["User", "Channel", "QuizTopic"]

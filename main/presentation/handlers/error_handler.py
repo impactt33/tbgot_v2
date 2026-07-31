@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 @error_router.errors(ExceptionTypeFilter(AppError), F.update.message.as_("message"))
 async def app_error_in_message(event: ErrorEvent, message: types.Message) -> bool:
-    error: AppError = event.exception # type: ignore[assigment]
+    error: AppError = event.exception # type: ignore[assignment]
     logger.warning("AppError: %s", error.detail)
     try:
         await message.answer(error.user_message)
@@ -22,12 +22,12 @@ async def app_error_in_message(event: ErrorEvent, message: types.Message) -> boo
 
 @error_router.errors(ExceptionTypeFilter(AppError), F.update.callback_query.as_("callback"))
 async def app_error_in_callback(event: ErrorEvent, callback: types.CallbackQuery) -> bool:
-    error: AppError = event.exception # type: ignore[assigment]
+    error: AppError = event.exception # type: ignore[assignment]
     logger.warning("AppError: %s", error.detail)
     try:
         await callback.answer(error.user_message, show_alert=True)
     except TelegramAPIError:
-        logger.warning("Failed to send callback answer to user %s", callback.chat.id)
+        logger.warning("Failed to send callback answer to user %s", callback.from_user.id)
     return True
 
 @error_router.errors()

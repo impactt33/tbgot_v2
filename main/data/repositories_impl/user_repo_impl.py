@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from main.data.enums import UserRole
+from main.domain.enums import UserRole
 from main.data.models import User
 from main.domain.entities import UserCreateEntity
 from main.domain.entities.user_entity import UserEntity, NewUserEntity
@@ -25,7 +25,7 @@ class UserRepoImpl(UserRepo):
         result = await self.session.execute(query)
         user = result.scalar_one_or_none()
 
-        return user
+        return user.to_entity() if user is not None else None
 
     async def get_by_telegram_id(self, telegram_id: int) -> UserEntity | None:
         query = select(User).where(
@@ -33,7 +33,7 @@ class UserRepoImpl(UserRepo):
         )
 
         user = await self.session.scalar(query)
-        return user
+        return user.to_entity() if user is not None else None
 
     async def get_or_create_user(self, user_entity: UserCreateEntity) -> NewUserEntity:
         query = (

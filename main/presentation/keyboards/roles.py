@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from main.data.enums import UserRole
+from main.domain.enums import UserRole
 
 roles_keyboard = InlineKeyboardMarkup(
     inline_keyboard=[
