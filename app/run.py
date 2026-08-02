@@ -8,8 +8,7 @@ from dishka.integrations.aiogram import setup_dishka
 
 from app.container import container
 from core.config import settings, setup_logging
-from main.presentation.handlers import command_router, callback_router, message_router, error_router
-from main.presentation.handlers.admin_panel_handlers import admin_router
+from main.presentation.handlers import command_router, callback_router, message_router, error_router, admin_router
 
 
 async def main() -> None:

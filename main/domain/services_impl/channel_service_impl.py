@@ -1,5 +1,5 @@
 from main.domain.entities import ChannelEntity, ChannelAddEntity
-from main.domain.errors import ChannelNotFoundError
+from main.domain.errors import ChannelNotFoundError, ChannelAlreadyAddedError
 from main.domain.repositories import ChannelRepo
 from main.domain.services.channel_service import ChannelService
 
@@ -38,7 +38,7 @@ class ChannelServiceImpl(ChannelService):
         added_channel = await self.channel_repo.add_channel(channel)
 
         if added_channel is None:
-            raise ChannelNotFoundError(channel_id=channel.channel_id)
+            raise ChannelAlreadyAddedError()
 
         return added_channel
 

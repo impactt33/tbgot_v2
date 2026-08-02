@@ -12,7 +12,7 @@ from main.domain.services import UserService
 from main.domain.services.channel_service import ChannelService
 from main.domain.services_impl import UserServiceImpl
 from main.presentation.keyboards import roles_keyboard
-from main.presentation.states import AdminProvideRightsState, AdminAddChannelState
+from main.presentation.states import AdminProvideRightsState, AdminChannelActionState
 
 message_router = Router(name=__name__)
 

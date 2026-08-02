@@ -1,1 +1,1 @@
-from .is_admin import IsAdminFilter
+from .is_admin import IsAdminStateFilter

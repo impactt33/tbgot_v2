@@ -15,8 +15,14 @@ class ChannelNotFoundError(ChannelError):
 class ChannelMissingError(ChannelError):
     user_message = "Missing channel."
 
+class ChannelAlreadyAddedError(ChannelError):
+    user_message = "Channel already connected."
+
 class ChannelAddingError(ChannelError):
     user_message = "Error while adding channel. Try again later."
+
+class ChannelRemovingError(ChannelError):
+    user_message = "Error while removing channel. Try again later."
 
 class BotNotMemberOfChannelError(ChannelError):
     user_message = "Bot is not member of this channel."

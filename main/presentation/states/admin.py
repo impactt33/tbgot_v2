@@ -1,14 +1,10 @@
 from aiogram.fsm.state import StatesGroup, State
 
-admin_states = []
-
 class AdminProvideRightsState(StatesGroup):
     contact = State()
     role = State()
 
-    admin_states.append(__name__)
-
-class AdminAddChannelState(StatesGroup):
+class AdminChannelActionState(StatesGroup):
     waiting_for_channel = State()
 
-    admin_states.append(__name__)
+ADMIN_STATES = (AdminProvideRightsState, AdminChannelActionState)

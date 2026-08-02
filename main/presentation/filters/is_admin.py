@@ -1,20 +1,20 @@
 from aiogram.filters import Filter
 from aiogram.types import TelegramObject, User
+from dishka import FromDishka
+from dishka.integrations.aiogram import inject
 
-from main.presentation.states import admin_states
+from main.domain.services import UserService
 
 
-class IsAdminFilter(Filter):
+class IsAdminStateFilter(Filter):
+    @inject
     async def __call__(
         self,
         event: TelegramObject,
-        raw_state: str | None = None,
+        user_service: FromDishka[UserService],
         event_from_user: User | None = None
     ) -> bool:
-        if event_from_user is None or raw_state is None:
-            return False
-
-        if raw_state.split(':')[0] in admin_states:
+        if await user_service.is_admin(event_from_user.id):
             return True
 
         return False

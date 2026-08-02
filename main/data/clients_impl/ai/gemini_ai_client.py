@@ -1,23 +1,30 @@
 import logging
 from typing import TypeVar
 
+import httpx
 from google import genai
 from google.genai import types
+from google.genai import errors as genai_errors
 from pydantic import BaseModel
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 from main.domain.clients import AIClient
+from main.domain.enums.ai_answer_failures import AIFailure
 
 logger = logging.getLogger(__name__)
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
-class GeminiGenerateConfig(BaseModel):
-    system_instruction: str | None = None
-    response_mime_type: str = "plain/text"
-    response_schema: BaseModel | None = None
-    max_output_tokens: int = 4096
-    thinking_config: types.ThinkingConfig = types.ThinkingConfig(thinking_budget=0)
+_RETRYABLE_NETWORK = (httpx.TimeoutException, httpx.NetworkError)
+_UNAVAILABLE_ERRORS = (genai_errors.ServerError, *_RETRYABLE_NETWORK)
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Retry only accidental errors."""
+    if isinstance(exc, _RETRYABLE_NETWORK):
+        return True
+    if isinstance(exc, genai_errors.ServerError):
+        return True
+    return isinstance(exc, genai_errors.APIError) and exc.code == 429
 
 
 class GeminiAIClient(AIClient):
@@ -28,44 +35,96 @@ class GeminiAIClient(AIClient):
         )
 
     @staticmethod
-    def process_to_history(history: list[str]) -> list[types.Content]:
+    def process_to_history( # TODO: в будушем посмотреть как парситься история, чтобы не было двух последних user
+        prompt: str,
+        *,
+        history: list[str] | None = None,
+        images: list[bytes] | None = None,
+        mime_type: str = "image/jpeg"
+    ) -> list[types.Content]:
         gemini_history = []
-
-        if history is None:
-            return gemini_history
-
         role = "user"
 
-        for content in history:
-            gemini_history.append(
-                types.Content(role=role, parts=[types.Part(text=content)])
-            )
+        if history is not None:
+            for content in history:
+                gemini_history.append(
+                    types.Content(role=role, parts=[types.Part(text=content)])
+                )
 
-            role = "model" if role == "user" else "user"
+                role = "model" if role == "user" else "user"
+
+        parts = [types.Part(text=prompt)]
+
+        if images is not None:
+            for image in images:
+                parts.append(types.Part.from_bytes(data=image, mime_type=mime_type))
+
+        gemini_history.append(
+            types.Content(role="user", parts=parts)
+        )
 
         return gemini_history
 
+    # noinspection PyTypeChecker
     @retry(
-        retry=retry_if_exception_type((TimeoutError, ConnectionError)),
+        retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10)
+        wait=wait_exponential(multiplier=1, min=1, max=10), # type: ignore
+        reraise=True
     )
     async def _generate_content(
         self,
         content: list[types.Content],
+        *,
         generate_config: types.GenerateContentConfig
-    ) -> types.GenerateContentResponse | None:
-        try:
-            response = await self.client.aio.models.generate_content( # TODO: create GenerateContentConfigDict
-                model="gemini-2.5-flash-lite",
-                contents=content,
-                config=generate_config
-            )
-        except Exception as exc:
-            logger.exception("Failed to generate content: %s", exc)
-            return None
+    ) -> types.GenerateContentResponse:
+        return await self.client.aio.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=content,
+            config=generate_config
+        )
 
-        return response
+    async def _call(
+        self,
+        prompt: str,
+        images: list[bytes] | None = None,
+        history: list[str] | None = None,
+        *,
+        config: types.GenerateContentConfig,
+        mime_type: str = "image/jpeg"
+    ) -> types.GenerateContentResponse | AIFailure:
+        gemini_history = self.process_to_history(prompt, images=images, mime_type=mime_type, history=history)
+
+        try:
+            return await self._generate_content(gemini_history, generate_config=config)
+        except genai_errors.ClientError:
+            logger.exception("Gemini rejected the request")
+            return AIFailure.REJECTED
+        except _UNAVAILABLE_ERRORS:
+            logger.exception("Gemini is unavailable")
+            return AIFailure.UNAVAILABLE
+        except Exception:
+            logger.exception("Unexpected Gemini failure")
+            return AIFailure.UNAVAILABLE
+
+    async def ask_text(self, prompt: str, *, system: str | None = None) -> str | AIFailure:
+        generate_config = types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="text/plain",
+            max_output_tokens=2048,
+            thinking_config=types.ThinkingConfig(thinking_budget=0)
+        )
+
+        response = await self._call(prompt, config=generate_config)
+
+        if isinstance(response, AIFailure):
+            return response
+
+        if not response.text:
+            logger.error("Gemini request failed")
+            return AIFailure.EMPTY
+
+        return response.text # type: ignore
 
     async def ask_structured(
         self,
@@ -73,48 +132,48 @@ class GeminiAIClient(AIClient):
         schema: type[TModel],
         *,
         system: str | None = None
-    ) -> TModel | None:
-        generate_config = GeminiGenerateConfig(
+    ) -> TModel | AIFailure:
+        generate_config = types.GenerateContentConfig(
             system_instruction=system,
             response_mime_type="application/json",
             response_schema=schema,
-            max_output_tokens=4096,
+            max_output_tokens=8192,
             thinking_config=types.ThinkingConfig(thinking_budget=0)
         )
 
-        content = self.process_to_history([prompt])
-        config = types.GenerateContentConfig(**generate_config.model_dump())
+        response = await self._call(prompt, config=generate_config)
 
-        response = await self._generate_content(content, config)
-
-        if response is None:
-            logger.exception("Gemini request failed")
+        if isinstance(response, AIFailure):
             return response
 
         parsed = response.parsed
         if not isinstance(parsed, schema):
-            logger.exception("Gemini returned unprocessable payload: %s", parsed)
+            logger.error("Gemini returned unprocessable payload: %s", parsed)
+            return AIFailure.UNPARSEABLE
 
         return parsed
 
-    async def ask_text(self, prompt: str, *, system: str | None = None) -> str | None:
-        generate_config = GeminiGenerateConfig(
+    async def ask_image(
+        self,
+        prompt: str,
+        images: list[bytes],
+        *,
+        system: str | None = None,
+        mime_type: str = "image/jpeg"
+    ) -> str | AIFailure:
+        generate_config = types.GenerateContentConfig(
             system_instruction=system,
             response_mime_type="text/plain",
-            max_output_tokens=2048,
+            max_output_tokens=4096,
             thinking_config=types.ThinkingConfig(thinking_budget=0)
         )
+        response = await self._call(prompt, images=images, mime_type=mime_type, config=generate_config)
 
-        content = self.process_to_history([prompt])
-        config = types.GenerateContentConfig(**generate_config.model_dump())
-
-        response = await self._generate_content(content, config)
-
-        if response is None:
-            logger.exception("Gemini request failed")
+        if isinstance(response, AIFailure):
             return response
 
-        return response.text
+        if not response.text:
+            logger.error("Gemini request failed")
+            return AIFailure.EMPTY
 
-    async def ask_image(self, prompt: str, images: list[bytes], *, mime_type: str = "image/jpeg") -> str | None:
-        ...
+        return response.text # type: ignore
