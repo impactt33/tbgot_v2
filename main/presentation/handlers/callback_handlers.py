@@ -42,11 +42,11 @@ async def provide_role_callback(callback: CallbackQuery, bot: Bot, state: FSMCon
     logger.debug(f"New role is {new_role}")
 
     data = await state.get_data()
-    telegram_id = data.get("contact")
+    telegram_id: int | None = data.get("contact")
 
     await user_service.change_user_role(
         actor_telegram_id=callback.from_user.id,
-        target_telegram_id=telegram_id,
+        target_telegram_id=telegram_id, #type: ignore
         new_role=new_role
     )
 
@@ -56,7 +56,7 @@ async def provide_role_callback(callback: CallbackQuery, bot: Bot, state: FSMCon
 
     try:
         await bot.send_message(
-            chat_id=telegram_id,
+            chat_id=telegram_id, #type: ignore
             text=f"Your role was changed to {new_role_name} by {callback.from_user.username}"
         )
     except TelegramForbiddenError:

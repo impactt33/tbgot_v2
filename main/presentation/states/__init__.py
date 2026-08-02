@@ -1,5 +1,5 @@
 from .admin import *
 
 __all__ = [
-    "AdminProvideRightsState", "AdminAddChannelState",
+    "AdminProvideRightsState", "AdminAddChannelState", "admin_states"
 ]

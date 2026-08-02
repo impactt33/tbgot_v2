@@ -38,7 +38,7 @@ class ChannelServiceImpl(ChannelService):
         added_channel = await self.channel_repo.add_channel(channel)
 
         if added_channel is None:
-            raise ChannelNotFoundError(channel_id=channel.id)
+            raise ChannelNotFoundError(channel_id=channel.channel_id)
 
         return added_channel
 

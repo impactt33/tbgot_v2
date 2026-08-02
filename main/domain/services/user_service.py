@@ -18,6 +18,14 @@ class UserService(ABC):
         ...
 
     @abstractmethod
+    async def find_by_username(self, username: str) -> UserEntity | None:
+        ...
+
+    @abstractmethod
+    async def find_by_telegram_id(self, telegram_id: int) -> UserEntity | None:
+        ...
+
+    @abstractmethod
     async def change_user_role(self, actor_telegram_id: int, target_telegram_id: int, new_role: UserRole) -> UserEntity:
         ...
 

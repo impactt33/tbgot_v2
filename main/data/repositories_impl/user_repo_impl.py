@@ -23,7 +23,7 @@ class UserRepoImpl(UserRepo):
         )
 
         result = await self.session.execute(query)
-        user = result.scalar_one_or_none()
+        user: User | None = result.scalar_one_or_none()
 
         return user.to_entity() if user is not None else None
 
@@ -32,7 +32,7 @@ class UserRepoImpl(UserRepo):
             User.telegram_id == telegram_id
         )
 
-        user = await self.session.scalar(query)
+        user: User | None = await self.session.scalar(query)
         return user.to_entity() if user is not None else None
 
     async def get_or_create_user(self, user_entity: UserCreateEntity) -> NewUserEntity:
@@ -52,7 +52,7 @@ class UserRepoImpl(UserRepo):
             )
 
         await self.session.commit()
-        return NewUserEntity(user.to_entity(), created)
+        return NewUserEntity(user.to_entity(), created) # type: ignore
 
     async def change_user_role(self, telegram_id: int, new_role: UserRole) -> UserEntity | None:
         query = (
@@ -61,7 +61,7 @@ class UserRepoImpl(UserRepo):
             .values(role=new_role)
             .returning(User)
         )
-        user = await self.session.scalar(query)
+        user: User | None = await self.session.scalar(query)
 
         await self.session.commit()
 
@@ -72,6 +72,6 @@ class UserRepoImpl(UserRepo):
             select(User)
             .where(User.telegram_id == telegram_id)
         )
-        user = await self.session.scalar(query)
+        user: User | None = await self.session.scalar(query)
 
         return user.role == UserRole.ADMIN if user is not None else False

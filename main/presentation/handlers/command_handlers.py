@@ -2,13 +2,11 @@ import logging
 
 from aiogram import Router, types
 from aiogram.filters import CommandStart, Command
-from aiogram.fsm.context import FSMContext
 from dishka import FromDishka
 
 from main.domain.entities import UserCreateEntity
 from main.domain.services import UserService
 from main.presentation.keyboards import choose_action_admin_keyboard
-from main.presentation.states import AdminProvideRightsState
 
 command_router = Router(name = __name__)
 
@@ -30,8 +28,8 @@ async def command_start(message: types.Message, user_service: FromDishka[UserSer
     else:
         await message.answer("Welcome back!")
 
-@command_router.message(Command("admin"))
-async def command_admin(message: types.Message, state: FSMContext, user_service: FromDishka[UserService]):
+@command_router.message(Command("admin")) #type: ignore
+async def command_admin(message: types.Message, user_service: FromDishka[UserService]):
     logger.info(f"User {message.from_user.id} entered admin mode")
 
     user_is_admin = await user_service.is_admin(message.from_user.id)
@@ -41,7 +39,7 @@ async def command_admin(message: types.Message, state: FSMContext, user_service:
         return
 
     await message.answer(
-        f"Welcome, {message.from_user.username}! Choose action to continue:",
+        f"Welcome, {message.from_user.username or "User"}! Choose action to continue:",
         reply_markup=choose_action_admin_keyboard
     )
 

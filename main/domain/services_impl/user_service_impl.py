@@ -9,6 +9,12 @@ class UserServiceImpl(UserService):
     def __init__(self, user_repo: UserRepo):
         self.user_repo = user_repo
 
+    async def find_by_username(self, username: str) -> UserEntity | None:
+        return await self.user_repo.get_by_username(username)
+
+    async def find_by_telegram_id(self, telegram_id: int) -> UserEntity | None:
+        return await self.user_repo.get_by_telegram_id(telegram_id)
+
     async def get_or_create_user(self, user_create_entity: UserCreateEntity) -> NewUserEntity:
         return await self.user_repo.get_or_create_user(user_create_entity)
 

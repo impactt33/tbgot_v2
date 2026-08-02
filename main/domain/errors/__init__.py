@@ -3,5 +3,5 @@ from .channel_errors import *
 from .ai_client_errors import *
 
 __all__ = ["UserAlreadyExistsError", "UserNotFoundError", "CannotChangeOwnRoleError",
-           "ChannelNotFoundError", "BotNotMemberOfChannelError",
+           "ChannelNotFoundError", "BotNotMemberOfChannelError", "ChannelMissingError", "ChannelAddingError",
            "RequestFailedError", "AnswerTooBigError",]

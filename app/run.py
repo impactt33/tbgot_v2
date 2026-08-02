@@ -9,6 +9,7 @@ from dishka.integrations.aiogram import setup_dishka
 from app.container import container
 from core.config import settings, setup_logging
 from main.presentation.handlers import command_router, callback_router, message_router, error_router
+from main.presentation.handlers.admin_panel_handlers import admin_router
 
 
 async def main() -> None:
@@ -26,6 +27,7 @@ async def main() -> None:
     dp.include_router(command_router)
     dp.include_router(callback_router)
     dp.include_router(message_router)
+    dp.include_router(admin_router)
 
     setup_dishka(container=container, router=dp, auto_inject=True)
 
@@ -34,7 +36,7 @@ async def main() -> None:
         await dp.start_polling(bot)
     finally:
         await container.close()
-        await bot.session.close()
+        await bot.session.close() #type: ignore
 
 
 if __name__ == "__main__":

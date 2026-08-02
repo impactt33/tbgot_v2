@@ -14,7 +14,7 @@ class UserRepo(ABC):
         ...
 
     @abstractmethod
-    async def get_or_create_user(self, user: UserCreateEntity) -> NewUserEntity:
+    async def get_or_create_user(self, user_entity: UserCreateEntity) -> NewUserEntity:
         ...
 
     @abstractmethod

@@ -17,7 +17,7 @@ class ChannelRepoImpl(ChannelRepo):
             .where(Channel.username == username)
         )
 
-        channel = await self.session.scalar(query)
+        channel: Channel | None = await self.session.scalar(query)
 
         return channel.to_entity() if channel is not None else None
 
@@ -33,7 +33,7 @@ class ChannelRepoImpl(ChannelRepo):
             .on_conflict_do_nothing()
             .returning(Channel)
         )
-        added_channel = await self.session.scalar(query)
+        added_channel: Channel | None = await self.session.scalar(query)
 
         await self.session.commit()
 
@@ -45,7 +45,7 @@ class ChannelRepoImpl(ChannelRepo):
             .where(Channel.channel_id == channel_id)
             .returning(Channel)
         )
-        removed_channel = await self.session.scalar(query)
+        removed_channel: Channel | None = await self.session.scalar(query)
 
         await self.session.commit()
 
