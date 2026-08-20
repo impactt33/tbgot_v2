@@ -1,8 +1,8 @@
 """add posts table and link to quiz_topics
 
-Revision ID: 020959af4302
+Revision ID: faa7be71eab1
 Revises: 9679959b3bba
-Create Date: 2026-08-20 15:00:31.000012
+Create Date: 2026-08-20 20:59:41.196155
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '020959af4302'
+revision: str = 'faa7be71eab1'
 down_revision: Union[str, Sequence[str], None] = '9679959b3bba'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,8 +24,8 @@ def upgrade() -> None:
     op.create_table('posts',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('channel_id', sa.BigInteger(), nullable=False),
-    sa.Column('post_type', sa.Enum('QUIZ', 'MATERIAL', 'SOURCES', name='posttype', native_enum=False, length=16), nullable=False),
-    sa.Column('status', sa.Enum('DRAFT', 'PUBLISHED', 'FAILED', name='poststatus', native_enum=False, length=16), nullable=False),
+    sa.Column('post_type', sa.Enum('QUIZ', 'MATERIAL', 'SOURCES', name='posttype', native_enum=False, create_constraint=True, length=16), nullable=False),
+    sa.Column('status', sa.Enum('DRAFT', 'PUBLISHED', 'FAILED', name='poststatus', native_enum=False, create_constraint=True, length=16), nullable=False),
     sa.Column('payload', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
     sa.Column('telegram_message_id', sa.BigInteger(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),

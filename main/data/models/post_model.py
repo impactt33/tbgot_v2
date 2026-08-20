@@ -21,10 +21,10 @@ class Post(Base):
         index=True
     )
     post_type: Mapped[PostType] = mapped_column(
-        SAEnum(PostType, native_enum=False, length=16)
+        SAEnum(PostType, native_enum=False, length=16, create_constraint=True)
     )
     status: Mapped[PostStatus] = mapped_column(
-        SAEnum(PostStatus, native_enum=False, length=16),
+        SAEnum(PostStatus, native_enum=False, length=16, create_constraint=True),
         default=PostStatus.DRAFT
     )
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)

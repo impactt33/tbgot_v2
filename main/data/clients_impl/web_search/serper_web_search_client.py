@@ -23,7 +23,7 @@ class SerperWebSearchClient(WebSearchClient):
         )),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        raraise=True
+        reraise=True
     )
     async def _request(self, query: str, *, limit: int = 5) -> dict:
         response = await self.http_client.post(

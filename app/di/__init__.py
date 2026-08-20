@@ -3,5 +3,13 @@ from .database import DatabaseProvider
 from .services import ServiceProvider
 from .repositories import RepoProvider
 from .clients import ClientProvider
+from .use_cases import UseCaseProvider
 
-__all__ = ["ConfigProvider", "DatabaseProvider", "ServiceProvider", "RepoProvider", "ClientProvider"]
+__all__ = [
+    "ConfigProvider",
+    "DatabaseProvider",
+    "ServiceProvider",
+    "RepoProvider",
+    "ClientProvider",
+    "UseCaseProvider"
+]

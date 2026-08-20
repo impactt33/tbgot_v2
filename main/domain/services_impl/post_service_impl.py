@@ -9,12 +9,7 @@ class PostServiceImpl(PostService):
         self.post_repo = post_repo
 
     async def create_draft(self, data: PostCreateEntity) -> PostEntity:
-        draft = await self.post_repo.create_draft(data)
-
-        if draft is None:
-            raise PostWasNotCreated
-
-        return draft
+        return await self.post_repo.create_draft(data)
 
     async def find_by_id(self, post_id: int) -> PostEntity | None:
         return await self.post_repo.find_by_id(post_id)

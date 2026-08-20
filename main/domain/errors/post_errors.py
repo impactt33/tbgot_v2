@@ -15,4 +15,11 @@ class PostWasNotCreated(PostError):
     user_message = "Post was not created. Try again later."
 
     def __init__(self) -> None:
-        super().__init__(f"Post was not created.")
+        super().__init__("Post was not created.")
+
+class NoMaterialFoundError(PostError):
+    user_message = "Ничего подходящего не нашлось. Попробуй ещё раз."
+
+    def __init__(self, query: str | None = None) -> None:
+        self.query = query
+        super().__init__(f"Web search returned nothing for {query!r}.")

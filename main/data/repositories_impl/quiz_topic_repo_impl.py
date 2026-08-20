@@ -42,7 +42,7 @@ class QuizTopicRepoImpl(QuizTopicRepo):
 
     async def mark_used(self, topic_id: int, post_id: int) -> QuizTopicEntity | None:
         query = (
-            update(QuizTopic.used_in_post)
+            update(QuizTopic)
             .where(QuizTopic.id == topic_id)
             .values(used_in_post=post_id)
             .returning(QuizTopic)

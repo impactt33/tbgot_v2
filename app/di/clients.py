@@ -13,7 +13,7 @@ class ClientProvider(Provider):
     scope = Scope.APP
 
     @provide
-    async def http_client(self) -> AsyncIterable[httpx.AsyncClient]: # что такое AsyncIterable[httpx.AsyncClient] и какая тут логика работы
+    async def http_client(self) -> AsyncIterable[httpx.AsyncClient]:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
           yield client
 
@@ -26,4 +26,3 @@ class ClientProvider(Provider):
         self, settings: Settings, http_client: httpx.AsyncClient
     ) -> WebSearchClient:
         return SerperWebSearchClient(api_key=settings.SERPER_API_KEY, http_client=http_client)
-

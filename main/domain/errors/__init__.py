@@ -11,5 +11,5 @@ __all__ = ["UserAlreadyExistsError", "UserNotFoundError", "CannotChangeOwnRoleEr
            "AIClientError", "RequestFailedError", "AnswerTooBigError", "AnswerIsEmptyError", "AIClientUnavailable",
            "AIClientRejected", "AIClientUnparsableAnswer",
            "QuizTopicError", "QuizTopicNotFoundError",
-           "PostError", "PostNotFoundError", "PostWasNotCreated",
+           "PostError", "PostNotFoundError", "PostWasNotCreated", "CannotGenerateTopicError", "InvalidQuizDraftError", "NoMaterialFoundError",
            "WebSearchError"]

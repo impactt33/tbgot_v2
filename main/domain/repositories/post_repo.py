@@ -5,7 +5,7 @@ from main.domain.entities import PostEntity, PostCreateEntity
 
 class PostRepo(ABC):
     @abstractmethod
-    async def create_draft(self, data: PostCreateEntity) -> PostEntity | None:
+    async def create_draft(self, data: PostCreateEntity) -> PostEntity:
         ...
 
     @abstractmethod
