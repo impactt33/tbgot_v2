@@ -1,13 +1,29 @@
+from collections.abc import AsyncIterable
+
+import httpx
 from dishka import Provider, Scope, provide
 
 from core.config.settings import Settings
 from main.data.clients_impl.ai.gemini_ai_client import GeminiAIClient
-from main.domain.clients import AIClient
+from main.data.clients_impl.web_search.serper_web_search_client import SerperWebSearchClient
+from main.domain.clients import AIClient, WebSearchClient
 
 
 class ClientProvider(Provider):
     scope = Scope.APP
 
     @provide
+    async def http_client(self) -> AsyncIterable[httpx.AsyncClient]: # что такое AsyncIterable[httpx.AsyncClient] и какая тут логика работы
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+          yield client
+
+    @provide
     def ai_client(self, settings: Settings) -> AIClient:
         return GeminiAIClient(api_key=settings.GEMINI_API_KEY)
+
+    @provide
+    def web_search_client(
+        self, settings: Settings, http_client: httpx.AsyncClient
+    ) -> WebSearchClient:
+        return SerperWebSearchClient(api_key=settings.SERPER_API_KEY, http_client=http_client)
+

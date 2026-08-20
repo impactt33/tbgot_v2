@@ -1,11 +1,7 @@
-from enum import Enum
+from enum import Enum, auto
 
-from main.domain.errors import AIClientError, AnswerIsEmptyError, AIClientUnavailable, AIClientRejected, \
-    AIClientUnparsableAnswer
-
-
-class AIFailure(AIClientError, Enum):
-    UNAVAILABLE = AIClientUnavailable
-    REJECTED = AIClientRejected
-    EMPTY = AnswerIsEmptyError
-    UNPARSEABLE = AIClientUnparsableAnswer
+class AIFailure(Enum):
+    UNAVAILABLE = auto()
+    REJECTED = auto()
+    EMPTY = auto()
+    UNPARSEABLE = auto()

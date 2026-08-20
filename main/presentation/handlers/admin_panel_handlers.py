@@ -7,20 +7,21 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardRemove, ChatMemberAdministrator, Contact, CallbackQuery
 from dishka import FromDishka
 
+from core.errors import AppError
 from main.domain.entities import ChannelAddEntity
 from main.domain.enums import UserRole, ChannelAction
 from main.domain.errors import ChannelAddingError, ChannelMissingError, BotNotMemberOfChannelError, ChannelRemovingError
 from main.domain.services import UserService
 from main.domain.services.channel_service import ChannelService
-from main.presentation.filters import IsAdminStateFilter
+from main.presentation.filters import IsAdminFilter
 from main.presentation.keyboards import roles_keyboard, choose_channel_keyboard
 from main.presentation.states import AdminProvideRightsState, AdminChannelActionState, ADMIN_STATES
 
 admin_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
 
-admin_router.message.filter(IsAdminStateFilter())
-admin_router.callback_query.filter(IsAdminStateFilter())
+admin_router.message.filter(IsAdminFilter())
+admin_router.callback_query.filter(IsAdminFilter())
 
 
 @admin_router.message(StateFilter(*ADMIN_STATES), Command("quit")) #type: ignore
@@ -50,7 +51,7 @@ async def choose_admin_action(callback: CallbackQuery, state: FSMContext):
         case _:
             pass
 
-@admin_router.callback_query(F.data.startswith("provide_role_"))
+@admin_router.callback_query(AdminProvideRightsState.role, F.data.startswith("provide_role_"))
 async def provide_role_callback(callback: CallbackQuery, bot: Bot, state: FSMContext, user_service: FromDishka[UserService]):
     logger.debug(f"Got callback query {callback.data}")
 

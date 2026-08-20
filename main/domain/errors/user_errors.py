@@ -1,8 +1,8 @@
 from core.errors import AppError
 
-class UserError(AppError):
-    """Base class for user errors."""
 
+class UserError(AppError):
+    """Base class for all errors related to users."""
 
 class UserNotFoundError(UserError):
     user_message = "User not found."

@@ -6,7 +6,7 @@ from dishka.integrations.aiogram import inject
 from main.domain.services import UserService
 
 
-class IsAdminStateFilter(Filter):
+class IsAdminFilter(Filter):
     @inject
     async def __call__(
         self,
@@ -14,7 +14,7 @@ class IsAdminStateFilter(Filter):
         user_service: FromDishka[UserService],
         event_from_user: User | None = None
     ) -> bool:
-        if await user_service.is_admin(event_from_user.id):
-            return True
+        if event_from_user is None:
+            return False
 
-        return False
+        return await user_service.is_admin(event_from_user.id)

@@ -2,7 +2,7 @@ from core.errors import AppError
 
 
 class AIClientError(AppError):
-    """Base class for errors raised by AI clients."""
+    """Base class for all errors related to AIClients."""
 
 class RequestFailedError(AIClientError):
     user_message = "Request to AI client failed. Try again later."
@@ -15,13 +15,13 @@ class RequestFailedError(AIClientError):
 class AnswerIsEmptyError(AIClientError):
     user_message = "Answer from model is empty. Try again later."
 
-class AIClientUnavailable(AppError):
+class AIClientUnavailable(AIClientError):
     user_message = "AI client is not available. Try again later."
 
-class AIClientRejected(AppError):
+class AIClientRejected(AIClientError):
     user_message = "AI client rejected. Try again later."
 
-class AIClientUnparsableAnswer(AppError):
+class AIClientUnparsableAnswer(AIClientError):
     user_message = "Answer from model is unparsable. Try again later."
 
 class AnswerTooBigError(AIClientError):

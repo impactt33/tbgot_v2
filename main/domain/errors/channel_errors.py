@@ -2,7 +2,7 @@ from core.errors import AppError
 
 
 class ChannelError(AppError):
-    """Base class for errors raised by channel service."""
+    """Base class for all errors related to channels."""
 
 class ChannelNotFoundError(ChannelError):
     user_message = "Channel not found."
