@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["mypy>=1.13", "ruff>=0.8"]
+dev = ["mypy>=1.13", "ruff>=0.8", "pytest>=8.0", "pytest-asyncio>=0.24"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -30,3 +30,11 @@ no_implicit_optional = true
 [[tool.mypy.overrides]]
 module = "migration.versions.*"
 ignore_errors = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: обращается к настоящим Gemini/Serper, нужны ключи и сеть",
+]

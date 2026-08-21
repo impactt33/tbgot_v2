@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 
-from main.domain.enums.ai_answer_failures import AIFailure
+from main.domain.enums.failures.ai_answer_failures import AIFailure
 
 TModel = TypeVar("TModel", bound=BaseModel)
 

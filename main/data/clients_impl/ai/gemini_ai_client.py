@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 from main.domain.clients import AIClient
-from main.domain.enums.ai_answer_failures import AIFailure
+from main.domain.enums import AIFailure
 
 logger = logging.getLogger(__name__)
 

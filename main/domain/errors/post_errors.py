@@ -17,6 +17,14 @@ class PostWasNotCreated(PostError):
     def __init__(self) -> None:
         super().__init__("Post was not created.")
 
+class PostAlreadyPublishedError(PostError):
+    user_message = "This post was already published."
+
+    def __init__(self, post_id: int | None = None) -> None:
+        self.post_id = post_id
+
+        super().__init__(f"Post (post_id: {post_id!r}) was already published.")
+
 class NoMaterialFoundError(PostError):
     user_message = "Ничего подходящего не нашлось. Попробуй ещё раз."
 

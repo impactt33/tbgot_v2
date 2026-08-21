@@ -6,7 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dishka.integrations.aiogram import setup_dishka
 
-from app.container import container
+from app.container import create_container
 from core.config import settings, setup_logging
 from main.presentation.handlers import command_router, callback_router, message_router, error_router, admin_router
 
@@ -27,6 +27,8 @@ async def main() -> None:
     dp.include_router(callback_router)
     dp.include_router(message_router)
     dp.include_router(admin_router)
+
+    container = create_container(bot)
 
     setup_dishka(container=container, router=dp, auto_inject=True)
 

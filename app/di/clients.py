@@ -1,16 +1,24 @@
 from collections.abc import AsyncIterable
 
 import httpx
-from dishka import Provider, Scope, provide
+from aiogram import Bot
+from dishka import Provider, Scope, provide, from_context
 
 from core.config.settings import Settings
 from main.data.clients_impl.ai.gemini_ai_client import GeminiAIClient
+from main.data.clients_impl.telegram.telegram_publisher import TelegramPublisher
 from main.data.clients_impl.web_search.serper_web_search_client import SerperWebSearchClient
-from main.domain.clients import AIClient, WebSearchClient
+from main.domain.clients import AIClient, WebSearchClient, Publisher
 
 
 class ClientProvider(Provider):
     scope = Scope.APP
+
+    bot = from_context(Bot, scope=Scope.APP)
+
+    @provide
+    async def publisher(self, bot: Bot) -> Publisher:
+        return TelegramPublisher(bot)
 
     @provide
     async def http_client(self) -> AsyncIterable[httpx.AsyncClient]:
