@@ -31,3 +31,17 @@ class NoMaterialFoundError(PostError):
     def __init__(self, query: str | None = None) -> None:
         self.query = query
         super().__init__(f"Web search returned nothing for {query!r}.")
+
+class PostNotDraftError(PostError):
+    user_message = "This post was already published or publishing now."
+
+    def __init__(self, post_id: int | None = None) -> None:
+        self.post_id = post_id
+        super().__init__(f"Post (post_id: {post_id!r}) is not a draft or scheduled post.")
+
+class PostNotScheduledError(PostError):
+    user_message = "Publishing started already, cannot reject."
+
+    def __init__(self, post_id: int | None = None) -> None:
+        self.post_id = post_id
+        super().__init__(f"Post (post_id: {post_id!r}) is not in SCHEDULED status.")

@@ -7,12 +7,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardRemove, ChatMemberAdministrator, Contact, CallbackQuery
 from dishka import FromDishka
 
-from core.errors import AppError
 from main.domain.entities import ChannelAddEntity
 from main.domain.enums import UserRole, ChannelAction
 from main.domain.errors import ChannelAddingError, ChannelMissingError, BotNotMemberOfChannelError, ChannelRemovingError
 from main.domain.services import UserService
 from main.domain.services.channel_service import ChannelService
+from main.domain.use_cases import ChangeUserRoleUseCase
 from main.presentation.filters import IsAdminFilter
 from main.presentation.keyboards import roles_keyboard, choose_channel_keyboard
 from main.presentation.states import AdminProvideRightsState, AdminChannelActionState, ADMIN_STATES
@@ -52,7 +52,12 @@ async def choose_admin_action(callback: CallbackQuery, state: FSMContext):
             pass
 
 @admin_router.callback_query(AdminProvideRightsState.role, F.data.startswith("provide_role_"))
-async def provide_role_callback(callback: CallbackQuery, bot: Bot, state: FSMContext, user_service: FromDishka[UserService]):
+async def provide_role_callback(
+    callback: CallbackQuery,
+    bot: Bot,
+    state: FSMContext,
+    change_user_role: FromDishka[ChangeUserRoleUseCase]
+):
     logger.debug(f"Got callback query {callback.data}")
 
     new_role_name = callback.data.removeprefix("provide_role_")
@@ -64,7 +69,7 @@ async def provide_role_callback(callback: CallbackQuery, bot: Bot, state: FSMCon
     data = await state.get_data()
     telegram_id: int | None = data.get("contact")
 
-    await user_service.change_user_role(
+    await change_user_role(
         actor_telegram_id=callback.from_user.id,
         target_telegram_id=telegram_id, #type: ignore
         new_role=new_role

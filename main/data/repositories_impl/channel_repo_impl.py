@@ -50,3 +50,11 @@ class ChannelRepoImpl(ChannelRepo):
         await self.session.commit()
 
         return removed_channel.to_entity() if removed_channel is not None else None
+
+    async def list_all(self) -> list[ChannelEntity]:
+        query = (
+            select(Channel)
+            .order_by(Channel.added_at)
+        )
+        channels = await self.session.scalars(query)
+        return [channel.to_entity() for channel in channels]

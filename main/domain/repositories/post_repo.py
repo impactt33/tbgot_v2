@@ -14,6 +14,12 @@ class PostRepo(ABC):
         ...
 
     @abstractmethod
+    async def find_scheduled(
+        self, channel_id: int | None = None, limit: int = 20
+    ) -> list[PostEntity]:
+        """Scheduled posts, not changing status."""
+
+    @abstractmethod
     async def mark_published(self, post_id: int, telegram_message_id: int) -> PostEntity | None:
         ...
 
@@ -27,4 +33,12 @@ class PostRepo(ABC):
 
     @abstractmethod
     async def schedule(self, post_id: int, when: datetime) -> PostEntity | None:
-        ...
+        """None, if post not in DRAFT/SCHEDULED."""
+
+    @abstractmethod
+    async def unschedule(self, post_id: int) -> PostEntity | None:
+        """None, if post already not in SCHEDULED, it was claimed by scheduler."""
+
+    @abstractmethod
+    async def delete_draft(self, post_id: int) -> PostEntity | None:
+        """None, if post not in DRAFT/SCHEDULED. Published do not delete."""

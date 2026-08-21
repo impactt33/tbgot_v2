@@ -49,3 +49,6 @@ class ChannelServiceImpl(ChannelService):
             raise ChannelNotFoundError(channel_id=channel_id)
 
         return removed_channel
+
+    async def get_list_channels(self) -> list[ChannelEntity]:
+        return await self.channel_repo.list_all()

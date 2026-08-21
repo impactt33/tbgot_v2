@@ -19,3 +19,7 @@ class ChannelRepo(ABC):
     @abstractmethod
     async def remove_channel(self, channel_id: int) -> ChannelEntity | None:
         ...
+
+    @abstractmethod
+    async def list_all(self) -> list[ChannelEntity]:
+        ...

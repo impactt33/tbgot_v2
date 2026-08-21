@@ -1,3 +1,4 @@
 from .generate_quiz import GenerateQuizUseCase
 from .generate_source import GenerateMaterialPostUseCase
 from .publish_post import PublishPostUseCase, PreviewPostUseCase
+from .change_user_role import ChangeUserRoleUseCase

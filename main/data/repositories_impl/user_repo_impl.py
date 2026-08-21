@@ -67,11 +67,12 @@ class UserRepoImpl(UserRepo):
 
         return user.to_entity() if user is not None else None
 
-    async def is_admin(self, telegram_id: int) -> bool:
+    async def get_role(self, telegram_id: int) -> UserRole:
+        """UserRole.NONE if user not registered."""
         query = (
-            select(User)
+            select(User.role)
             .where(User.telegram_id == telegram_id)
         )
-        user: User | None = await self.session.scalar(query)
+        role: UserRole | None = await self.session.scalar(query)
 
-        return user.role == UserRole.ADMIN if user is not None else False
+        return role if role is not None else UserRole.NONE

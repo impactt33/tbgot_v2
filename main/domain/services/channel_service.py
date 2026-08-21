@@ -27,3 +27,7 @@ class ChannelService(ABC):
     @abstractmethod
     async def remove_channel(self, channel_id: int) -> ChannelEntity | None:
         ...
+
+    @abstractmethod
+    async def get_list_channels(self) -> list[ChannelEntity]:
+        ...

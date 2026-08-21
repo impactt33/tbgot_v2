@@ -44,5 +44,11 @@ class UserServiceImpl(UserService):
             raise UserNotFoundError(telegram_id=target_telegram_id)
         return user
 
+    async def get_role(self, telegram_id: int) -> UserRole:
+        return await self.user_repo.get_role(telegram_id)
+
     async def is_admin(self, telegram_id: int) -> bool:
-        return await self.user_repo.is_admin(telegram_id)
+        return await self.user_repo.get_role(telegram_id) is UserRole.ADMIN
+
+    async def has_access(self, telegram_id: int) -> bool:
+        return await self.user_repo.get_role(telegram_id) is not UserRole.NONE

@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from sqlalchemy.sql.schema import SchemaItem
 
 from core.config import settings
 from core.database import Base
@@ -23,6 +24,15 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(
+    obj: SchemaItem,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: SchemaItem | None,
+) -> bool:
+    return type_ != "check_constraint"
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -39,6 +49,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
@@ -53,6 +64,7 @@ def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        include_object=include_object,
         compare_type=True,
         compare_server_default=True
     )

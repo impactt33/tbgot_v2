@@ -1,7 +1,9 @@
 from datetime import datetime
 
+from pyasn1_modules.rfc7906 import aa_keyWrapAlgorithm
+
 from main.domain.entities import PostEntity, PostCreateEntity
-from main.domain.errors import PostNotFoundError, PostWasNotCreated
+from main.domain.errors import PostNotFoundError, PostWasNotCreated, PostNotDraftError, PostNotScheduledError
 from main.domain.repositories import PostRepo
 from main.domain.services.post_service import PostService
 
@@ -41,12 +43,31 @@ class PostServiceImpl(PostService):
         return post
 
     async def claim_due(self, limit: int = 10) -> list[PostEntity]:
-        return await self.post_repo.get_scheduled(limit)
+        return await self.post_repo.claim_scheduled(limit)
 
     async def schedule(self, post_id: int, when: datetime) -> PostEntity:
         post = await self.post_repo.schedule(post_id, when)
 
         if post is None:
-            raise PostNotFoundError(post_id)
+            raise PostNotDraftError(post_id)
+
+        return post
+
+    async def find_scheduled(self, channel_id: int | None = None, limit: int = 20) -> list[PostEntity]:
+        return await self.post_repo.find_scheduled(channel_id, limit)
+
+    async def unschedule(self, post_id: int) -> PostEntity:
+        post = await self.post_repo.unschedule(post_id)
+
+        if post is None:
+            raise PostNotScheduledError(post_id)
+
+        return post
+
+    async def delete_draft(self, post_id: int) -> PostEntity:
+        post = await self.post_repo.delete_draft(post_id)
+
+        if post is None:
+            raise PostNotDraftError(post_id)
 
         return post

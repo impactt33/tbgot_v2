@@ -1,6 +1,7 @@
 from dishka import Provider, Scope, provide
 
-from main.domain.use_cases import GenerateMaterialPostUseCase, GenerateQuizUseCase, PublishPostUseCase, PreviewPostUseCase
+from main.domain.use_cases import GenerateMaterialPostUseCase, GenerateQuizUseCase, PublishPostUseCase, \
+    PreviewPostUseCase, ChangeUserRoleUseCase
 
 
 class UseCaseProvider(Provider):
@@ -10,3 +11,4 @@ class UseCaseProvider(Provider):
     generate_material_post = provide(GenerateMaterialPostUseCase)
     publish_post = provide(PublishPostUseCase)
     preview_post = provide(PreviewPostUseCase)
+    change_role = provide(ChangeUserRoleUseCase)

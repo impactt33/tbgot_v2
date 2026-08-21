@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import BigInteger, String, text, Integer, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Enum as SAEnum
 
 from core.database import Base
 from main.domain.enums import UserRole
@@ -25,6 +26,7 @@ class User(Base):
     )
     username: Mapped[str | None] = mapped_column(String(63))
     role: Mapped[UserRole] = mapped_column(
+        SAEnum(UserRole, native_enum=False, length=16, create_constraint=True),
         default=UserRole.NONE,
         server_default=text("'NONE'")
     )

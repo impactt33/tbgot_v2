@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import update, func, select
+from sqlalchemy import update, func, select, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -82,8 +82,50 @@ class PostRepoImpl(PostRepo):
     async def schedule(self, post_id: int, when: datetime) -> PostEntity | None:
         query = (
             update(Post)
-            .where(Post.id == post_id, Post.status == PostStatus.DRAFT)
+            .where(
+                Post.id == post_id,
+                Post.status.in_((PostStatus.DRAFT, PostStatus.SCHEDULED))
+            )
             .values(status=PostStatus.SCHEDULED, scheduled_at=when)
+            .returning(Post)
+        )
+        post: Post | None = await self.session.scalar(query)
+        await self.session.commit()
+        return post.to_entity() if post is not None else None
+
+    async def find_scheduled(self, channel_id: int | None = None, limit: int = 20) -> list[PostEntity]:
+        query = (
+            select(Post)
+            .where(Post.status == PostStatus.SCHEDULED)
+            .order_by(Post.scheduled_at)
+            .limit(limit)
+        )
+
+        if channel_id is not None:
+            query = query.where(Post.channel_id == channel_id)
+
+        posts = (await self.session.scalars(query)).all()
+
+        return [post.to_entity() for post in posts]
+
+    async def unschedule(self, post_id: int) -> PostEntity | None:
+        query = (
+            update(Post)
+            .where(Post.id == post_id, Post.status == PostStatus.SCHEDULED)
+            .values(status=PostStatus.DRAFT, scheduled_at=None)
+            .returning(Post)
+        )
+        post: Post | None = await self.session.scalar(query)
+        await self.session.commit()
+        return post.to_entity() if post is not None else None
+
+    async def delete_draft(self, post_id: int) -> PostEntity | None:
+        query = (
+            delete(Post)
+            .where(
+                Post.id == post_id,
+                Post.status.in_((PostStatus.DRAFT, PostStatus.SCHEDULED)),
+            )
             .returning(Post)
         )
         post: Post | None = await self.session.scalar(query)

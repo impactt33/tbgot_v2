@@ -32,3 +32,15 @@ class PostService(ABC):
     @abstractmethod
     async def schedule(self, post_id: int, when: datetime) -> PostEntity:
         ...
+
+    @abstractmethod
+    async def find_scheduled(self, channel_id: int | None = None, limit: int = 20) -> list[PostEntity]:
+        ...
+
+    @abstractmethod
+    async def unschedule(self, post_id: int) -> PostEntity:
+        ...
+
+    @abstractmethod
+    async def delete_draft(self, post_id: int) -> PostEntity:
+        ...

@@ -22,5 +22,5 @@ class UserRepo(ABC):
         ...
 
     @abstractmethod
-    async def is_admin(self, telegram_id: int) -> bool:
+    async def get_role(self, telegram_id: int) -> UserRole:
         ...

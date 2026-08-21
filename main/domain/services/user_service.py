@@ -30,5 +30,13 @@ class UserService(ABC):
         ...
 
     @abstractmethod
+    async def get_role(self, telegram_id: int) -> UserRole:
+        ...
+
+    @abstractmethod
     async def is_admin(self, telegram_id: int) -> bool:
+        ...
+
+    @abstractmethod
+    async def has_access(self, telegram_id: int) -> bool:
         ...

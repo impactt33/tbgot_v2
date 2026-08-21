@@ -1,6 +1,6 @@
 from enum import Enum
 
 
-class ChannelAction(str, Enum):
-    ADD = "add"
-    REMOVE = "remove"
+class ChannelAction(Enum):
+    ADD = "ADD"
+    REMOVE = "REMOVE"

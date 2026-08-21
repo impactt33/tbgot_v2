@@ -14,4 +14,5 @@ __all__ = ["UserAlreadyExistsError", "UserNotFoundError", "CannotChangeOwnRoleEr
            "QuizTopicError", "QuizTopicNotFoundError",
            "PostError", "PostNotFoundError", "PostWasNotCreated", "CannotGenerateTopicError", "InvalidQuizDraftError", "NoMaterialFoundError",
            "WebSearchError", "PostAlreadyPublishedError",
-           "PublisherError", "UnsupportedPostTypeError", "PublishError"]
+           "PublisherError", "UnsupportedPostTypeError", "PublishError",
+           "PostNotScheduledError", "PostNotDraftError"]
