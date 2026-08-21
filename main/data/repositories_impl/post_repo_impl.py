@@ -57,3 +57,22 @@ class PostRepoImpl(PostRepo):
         post: Post | None = await self.session.scalar(query)
         await self.session.commit()
         return post.to_entity() if post is not None else None
+
+    async def get_scheduled(self, limit: int = 10) -> list[PostEntity]:
+        subquery = (
+            select(Post.id)
+            .where(Post.status == PostStatus.SCHEDULED, Post.scheduled_at <= func.now())
+            .order_by(Post.scheduled_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+            .scalar_subquery()
+        )
+        query = (
+            update(Post)
+            .where(Post.id.in_(subquery))
+            .values(status=PostStatus.PUBLISHING)
+            .returning(Post)
+        )
+        posts = (await self.session.scalars(query)).all()
+        await self.session.commit()
+        return [post.to_entity() for post in posts]

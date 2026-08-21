@@ -19,3 +19,7 @@ class PostRepo(ABC):
     @abstractmethod
     async def mark_failed(self, post_id: int) -> PostEntity | None:
         ...
+
+    @abstractmethod
+    async def get_scheduled(self, limit: int = 10) -> list[PostEntity]:
+        ...

@@ -7,6 +7,7 @@ from aiogram.enums import ParseMode
 from dishka.integrations.aiogram import setup_dishka
 
 from app.container import create_container
+from app.scheduler import run_scheduler
 from core.config import settings, setup_logging
 from main.presentation.handlers import command_router, callback_router, message_router, error_router, admin_router
 
@@ -32,10 +33,13 @@ async def main() -> None:
 
     setup_dishka(container=container, router=dp, auto_inject=True)
 
+    scheduler_task = asyncio.create_task(run_scheduler(container))
+
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
+        scheduler_task.cancel()
         await container.close()
         await bot.session.close() #type: ignore
 

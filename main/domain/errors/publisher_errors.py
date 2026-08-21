@@ -1,12 +1,12 @@
 from core.errors import AppError
-from main.domain.enums import PostType, post_type
+from main.domain.enums import PostType
 
 
 class PublisherError(AppError):
     """Base class for publisher errors."""
 
 class PublishError(PublisherError):
-    user_message = f"Cannot publish the post. Try again later."
+    user_message = "Cannot publish the post. Try again later."
 
     def __init__(self, post_id: int | None = None, exc: Exception | None = None):
         self.post_id = post_id

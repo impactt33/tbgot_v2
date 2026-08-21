@@ -17,7 +17,7 @@ class ClientProvider(Provider):
     bot = from_context(Bot, scope=Scope.APP)
 
     @provide
-    async def publisher(self, bot: Bot) -> Publisher:
+    def publisher(self, bot: Bot) -> Publisher:
         return TelegramPublisher(bot)
 
     @provide

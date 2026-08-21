@@ -37,3 +37,6 @@ class PostServiceImpl(PostService):
             raise PostNotFoundError(post_id)
 
         return post
+
+    async def claim_due(self, limit: int = 10) -> list[PostEntity]:
+        return await self.post_repo.get_scheduled(limit)

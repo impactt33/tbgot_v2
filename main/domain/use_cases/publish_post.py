@@ -2,7 +2,6 @@ from main.domain.clients import Publisher
 from main.domain.entities import PostEntity
 from main.domain.enums import PostStatus
 from main.domain.errors import PostAlreadyPublishedError, PublisherError
-from main.domain.repositories import post_repo
 from main.domain.services import PostService
 
 
@@ -19,7 +18,7 @@ class PublishPostUseCase:
 
         try:
             message_id = await self.publisher.publish(post, post.channel_id)
-        except PublisherError as err:
+        except PublisherError:
             await self.post_service.mark_failed(post_id)
             raise
 

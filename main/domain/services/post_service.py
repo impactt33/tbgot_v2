@@ -23,3 +23,7 @@ class PostService(ABC):
     @abstractmethod
     async def mark_failed(self, post_id: int) -> PostEntity:
         ...
+
+    @abstractmethod
+    async def claim_due(self, limit: int = 10) -> list[PostEntity]:
+        ...

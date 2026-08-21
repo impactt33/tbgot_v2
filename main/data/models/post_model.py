@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Integer, BigInteger, ForeignKey, DateTime, func
+from sqlalchemy import Integer, BigInteger, ForeignKey, DateTime, func, Index
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, declared_attr
 
 from core.database import Base
 from main.domain.entities import PostEntity
@@ -32,7 +32,18 @@ class Post(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @declared_attr.directive
+    def __table_args__(cls) -> tuple:
+        return (
+            Index(
+                "ix_posts_due",
+                "scheduled_at",
+                postgresql_where=cls.status == PostStatus.SCHEDULED,
+            ),
+        )
 
     def to_entity(self) -> PostEntity:
         return PostEntity(
