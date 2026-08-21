@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import update, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,7 +60,7 @@ class PostRepoImpl(PostRepo):
         await self.session.commit()
         return post.to_entity() if post is not None else None
 
-    async def get_scheduled(self, limit: int = 10) -> list[PostEntity]:
+    async def claim_scheduled(self, limit: int = 10) -> list[PostEntity]:
         subquery = (
             select(Post.id)
             .where(Post.status == PostStatus.SCHEDULED, Post.scheduled_at <= func.now())
@@ -76,3 +78,14 @@ class PostRepoImpl(PostRepo):
         posts = (await self.session.scalars(query)).all()
         await self.session.commit()
         return [post.to_entity() for post in posts]
+
+    async def schedule(self, post_id: int, when: datetime) -> PostEntity | None:
+        query = (
+            update(Post)
+            .where(Post.id == post_id, Post.status == PostStatus.DRAFT)
+            .values(status=PostStatus.SCHEDULED, scheduled_at=when)
+            .returning(Post)
+        )
+        post: Post | None = await self.session.scalar(query)
+        await self.session.commit()
+        return post.to_entity() if post is not None else None

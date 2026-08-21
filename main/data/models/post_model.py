@@ -54,5 +54,6 @@ class Post(Base):
             payload=self.payload,
             telegram_message_id=self.telegram_message_id,
             created_at=self.created_at,
+            scheduled_at=self.scheduled_at,
             published_at=self.published_at,
         )

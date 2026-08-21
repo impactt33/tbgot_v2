@@ -1,4 +1,5 @@
 from abc import abstractmethod, ABC
+from datetime import datetime
 
 from main.domain.entities import PostEntity, PostCreateEntity
 
@@ -21,5 +22,9 @@ class PostRepo(ABC):
         ...
 
     @abstractmethod
-    async def get_scheduled(self, limit: int = 10) -> list[PostEntity]:
+    async def claim_scheduled(self, limit: int = 10) -> list[PostEntity]:
+        ...
+
+    @abstractmethod
+    async def schedule(self, post_id: int, when: datetime) -> PostEntity | None:
         ...

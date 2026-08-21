@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from main.domain.entities import PostEntity, PostCreateEntity
 from main.domain.errors import PostNotFoundError, PostWasNotCreated
 from main.domain.repositories import PostRepo
@@ -40,3 +42,11 @@ class PostServiceImpl(PostService):
 
     async def claim_due(self, limit: int = 10) -> list[PostEntity]:
         return await self.post_repo.get_scheduled(limit)
+
+    async def schedule(self, post_id: int, when: datetime) -> PostEntity:
+        post = await self.post_repo.schedule(post_id, when)
+
+        if post is None:
+            raise PostNotFoundError(post_id)
+
+        return post

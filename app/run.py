@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -40,6 +41,8 @@ async def main() -> None:
         await dp.start_polling(bot)
     finally:
         scheduler_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await scheduler_task
         await container.close()
         await bot.session.close() #type: ignore
 

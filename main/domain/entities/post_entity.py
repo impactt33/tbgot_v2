@@ -14,6 +14,7 @@ class PostEntity(BaseModel):
     payload: dict[str, Any]
     telegram_message_id: int | None
     created_at: datetime
+    scheduled_at: datetime | None
     published_at: datetime | None
 
 class PostCreateEntity(BaseModel):

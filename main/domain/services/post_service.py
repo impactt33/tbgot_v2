@@ -1,3 +1,4 @@
+from datetime import datetime
 from abc import ABC, abstractmethod
 
 from main.domain.entities import PostCreateEntity, PostEntity
@@ -26,4 +27,8 @@ class PostService(ABC):
 
     @abstractmethod
     async def claim_due(self, limit: int = 10) -> list[PostEntity]:
+        ...
+
+    @abstractmethod
+    async def schedule(self, post_id: int, when: datetime) -> PostEntity:
         ...
