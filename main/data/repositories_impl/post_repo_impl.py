@@ -29,7 +29,10 @@ class PostRepoImpl(PostRepo):
         return post.to_entity()
 
     async def find_by_id(self, post_id: int) -> PostEntity | None:
-        result: Post | None = await self.session.get(Post, post_id) # type: ignore
+        result: Post | None = await self.session.scalar(
+            select(Post)
+            .where(Post.id == post_id)
+        )
         return result.to_entity() if result is not None else None
 
     async def mark_published(self, post_id: int, telegram_message_id: int) -> PostEntity | None:

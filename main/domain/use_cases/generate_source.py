@@ -34,7 +34,7 @@ class SearchQueryDraft(BaseModel):
     query: str = Field(max_length=100, description="Поисковый запрос на английском")
 
 
-class MaterialDraft(BaseModel):
+class SourceDraft(BaseModel):
     title: str = Field(max_length=100, description="Заголовок поста, до 8 слов")
     text: str = Field(
         max_length=700,
@@ -42,11 +42,11 @@ class MaterialDraft(BaseModel):
     )
 
 
-class GenerateMaterialPostRequest(BaseModel):
+class GenerateSourcePostRequest(BaseModel):
     channel_id: int
 
 
-class GenerateMaterialPostUseCase:
+class GenerateSourcePostUseCase:
     def __init__(
         self,
         ai_client: AIClient,
@@ -57,7 +57,7 @@ class GenerateMaterialPostUseCase:
         self.web_search = web_search
         self.post_service = post_service
 
-    async def __call__(self, request: GenerateMaterialPostRequest) -> PostEntity:
+    async def __call__(self, request: GenerateSourcePostRequest) -> PostEntity:
         query = unwrap_ai(
             await self.ai_client.ask_structured(
                 _QUERY_PROMPT, SearchQueryDraft, system=_SYSTEM
@@ -75,7 +75,7 @@ class GenerateMaterialPostUseCase:
                 _POST_PROMPT.format(
                     title=source.title, url=source.url, snippet=source.snippet
                 ),
-                MaterialDraft,
+                SourceDraft,
                 system=_SYSTEM,
             )
         )

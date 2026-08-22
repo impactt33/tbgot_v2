@@ -8,7 +8,7 @@ class QuizPayload(BaseModel):
     explanation: str = Field(max_length=200)
     topic_id: int
 
-class MaterialPayload(BaseModel):
+class SourcePayload(BaseModel):
     title: str
     text: str
     url: str

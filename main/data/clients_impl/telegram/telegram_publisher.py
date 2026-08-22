@@ -7,7 +7,7 @@ from aiogram.types import InputPollOption, LinkPreviewOptions
 from aiogram.utils.text_decorations import html_decoration as fmt
 
 from main.domain.clients import Publisher
-from main.domain.entities import MaterialPayload, PostEntity, QuizPayload
+from main.domain.entities import SourcePayload, PostEntity, QuizPayload
 from main.domain.enums import PostType
 from main.domain.errors import PublishError, UnsupportedPostTypeError
 
@@ -24,7 +24,7 @@ class TelegramPublisher(Publisher):
                 case PostType.QUIZ:
                     return await self._publish_quiz(post, chat_id)
                 case PostType.MATERIAL:
-                    return await self._publish_material(post, chat_id)
+                    return await self._publish_source(post, chat_id)
                 case _:
                     raise UnsupportedPostTypeError(post.post_type)
         except TelegramAPIError as exc:
@@ -44,8 +44,8 @@ class TelegramPublisher(Publisher):
         )
         return message.message_id
 
-    async def _publish_material(self, post: PostEntity, chat_id: int) -> int:
-        payload = MaterialPayload.model_validate(post.payload)
+    async def _publish_source(self, post: PostEntity, chat_id: int) -> int:
+        payload = SourcePayload.model_validate(post.payload)
         text = f"{fmt.quote(payload.title)}\n\n{fmt.quote(payload.text)}"
         message = await self.bot.send_message(
             chat_id=chat_id,
