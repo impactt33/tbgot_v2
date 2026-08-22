@@ -1,7 +1,5 @@
 from datetime import datetime
 
-from pyasn1_modules.rfc7906 import aa_keyWrapAlgorithm
-
 from main.domain.entities import PostEntity, PostCreateEntity
 from main.domain.errors import PostNotFoundError, PostWasNotCreated, PostNotDraftError, PostNotScheduledError
 from main.domain.repositories import PostRepo

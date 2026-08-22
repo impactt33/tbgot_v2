@@ -19,3 +19,7 @@ class QuizTopicService(ABC):
     @abstractmethod
     async def mark_used(self, topic_id: int, post_id: int) -> QuizTopicEntity:
         ...
+
+    @abstractmethod
+    async def delete_unused(self, topic_id: int) -> QuizTopicEntity | None:
+        """None doesn`t raise an error because it`s okay if topic wasn`t delete. Check repo description."""

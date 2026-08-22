@@ -4,6 +4,7 @@ from .services import ServiceProvider
 from .repositories import RepoProvider
 from .clients import ClientProvider
 from .use_cases import UseCaseProvider
+from .cache import CacheProvider
 
 __all__ = [
     "ConfigProvider",
@@ -11,5 +12,6 @@ __all__ = [
     "ServiceProvider",
     "RepoProvider",
     "ClientProvider",
-    "UseCaseProvider"
+    "UseCaseProvider",
+    "CacheProvider"
 ]

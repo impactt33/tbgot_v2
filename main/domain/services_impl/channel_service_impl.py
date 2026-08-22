@@ -50,5 +50,5 @@ class ChannelServiceImpl(ChannelService):
 
         return removed_channel
 
-    async def get_list_channels(self) -> list[ChannelEntity]:
+    async def list_channels(self) -> list[ChannelEntity]:
         return await self.channel_repo.list_all()

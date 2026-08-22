@@ -5,7 +5,6 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiohttp.typedefs import Middleware
 from dishka.integrations.aiogram import setup_dishka
 
 from app.container import create_container

@@ -1,4 +1,4 @@
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,19 @@ class QuizTopicRepoImpl(QuizTopicRepo):
             update(QuizTopic)
             .where(QuizTopic.id == topic_id)
             .values(used_in_post=post_id)
+            .returning(QuizTopic)
+        )
+        topic: QuizTopic | None = await self.session.scalar(query)
+        await self.session.commit()
+        return topic.to_entity() if topic is not None else None
+
+    async def delete_unused(self, topic_id: int) -> QuizTopicEntity | None:
+        query = (
+            delete(QuizTopic)
+            .where(
+                QuizTopic.id == topic_id,
+                QuizTopic.used_in_post.is_(None)
+            )
             .returning(QuizTopic)
         )
         topic: QuizTopic | None = await self.session.scalar(query)

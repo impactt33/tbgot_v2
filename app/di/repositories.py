@@ -1,8 +1,6 @@
 from dishka import Provider, Scope, provide
 
-from main.data.repositories_impl import UserRepoImpl, ChannelRepoImpl
-from main.data.repositories_impl.post_repo_impl import PostRepoImpl
-from main.data.repositories_impl.quiz_topic_repo_impl import QuizTopicRepoImpl
+from main.data.repositories_impl import UserRepoImpl, ChannelRepoImpl, QuizTopicRepoImpl, PostRepoImpl
 from main.domain.repositories import UserRepo, ChannelRepo, QuizTopicRepo, PostRepo
 
 

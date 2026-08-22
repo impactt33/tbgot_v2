@@ -57,4 +57,4 @@ class ChannelRepoImpl(ChannelRepo):
             .order_by(Channel.added_at)
         )
         channels = await self.session.scalars(query)
-        return [channel.to_entity() for channel in channels]
+        return [channel.to_entity() for channel in channels.all()]

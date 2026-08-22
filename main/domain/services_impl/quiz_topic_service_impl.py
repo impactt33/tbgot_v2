@@ -22,3 +22,6 @@ class QuizTopicServiceImpl(QuizTopicService):
         if topic is None:
             raise QuizTopicNotFoundError(topic_id)
         return topic
+
+    async def delete_unused(self, topic_id: int) -> QuizTopicEntity | None:
+        return await self.quiz_topic_repo.delete_unused(topic_id)

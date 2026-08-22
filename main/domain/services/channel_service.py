@@ -29,5 +29,5 @@ class ChannelService(ABC):
         ...
 
     @abstractmethod
-    async def get_list_channels(self) -> list[ChannelEntity]:
+    async def list_channels(self) -> list[ChannelEntity]:
         ...

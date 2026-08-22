@@ -19,3 +19,7 @@ class QuizTopicRepo(ABC):
     @abstractmethod
     async def mark_used(self, topic_id: int, post_id: int) -> QuizTopicEntity | None:
         ...
+
+    @abstractmethod
+    async def delete_unused(self, topic_id: int) -> QuizTopicEntity | None:
+        """Returns None if topic doesn't exist or already used in post."""
