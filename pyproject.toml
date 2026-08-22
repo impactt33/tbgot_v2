@@ -32,6 +32,7 @@ module = "migration.versions.*"
 ignore_errors = true
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-m 'not live'"

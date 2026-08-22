@@ -1,7 +1,8 @@
-import os
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -39,6 +40,21 @@ class Settings(BaseSettings):
 
     DB_MIN_POOL_SIZE: int = 1
     DB_MAX_POOL_SIZE: int = 10
+
+    USER_TIMEZONE: str = "Europe/Moscow"
+
+    @field_validator("USER_TIMEZONE")
+    @classmethod
+    def _timezone_must_exists(cls, value: str) -> str:
+        try :
+            ZoneInfo(value)
+        except Exception as exc:
+            raise ValueError(f"Unknown timezone: {value!r}") from exc
+        return value
+
+    @property
+    def user_tz(self) -> ZoneInfo:
+        return ZoneInfo(self.USER_TIMEZONE)
 
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8080

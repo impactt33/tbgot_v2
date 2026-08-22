@@ -61,7 +61,8 @@ class FakePostService:
             payload=data.payload,
             telegram_message_id=None,
             created_at=datetime.now(UTC),
-            published_at=None,
+            scheduled_at=None,
+            published_at=None
         )
 
     async def find_by_id(self, post_id): ...
