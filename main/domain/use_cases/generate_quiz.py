@@ -3,7 +3,7 @@ import logging
 from pydantic import BaseModel, Field
 
 from main.domain.clients import AIClient
-from main.domain.entities import PostCreateEntity, PostEntity, QuizTopicAddEntity
+from main.domain.entities import PostCreateEntity, PostEntity, QuizTopicAddEntity, QuizTopicEntity
 from main.domain.enums import PostType
 from main.domain.errors import CannotGenerateTopicError, InvalidQuizDraftError
 from main.domain.services import PostService, QuizTopicService
@@ -56,6 +56,7 @@ class QuizDraft(BaseModel):
 
 class GenerateQuizRequest(BaseModel):
     channel_id: int
+    topic: QuizTopicEntity | None = None
 
 class GenerateQuizUseCase:
     def __init__(
@@ -69,8 +70,11 @@ class GenerateQuizUseCase:
         self.post_service = post_service
 
     async def __call__(self, request: GenerateQuizRequest) -> PostEntity:
-        topic = await self._pick_new_topic(request.channel_id)
-        logger.info("Quiz topic for channel %s: %r", request.channel_id, topic.topic)
+        if request.topic is None:
+            topic = await self._pick_new_topic(request.channel_id)
+            logger.info("Quiz topic for channel %s: %r", request.channel_id, topic.topic)
+        else:
+            topic = request.topic
 
         draft = unwrap_ai(
             await self.ai_client.ask_structured(
@@ -92,7 +96,11 @@ class GenerateQuizUseCase:
         await self.quiz_topic_service.mark_used(topic.id, post.id)
         return post
 
-    async def _pick_new_topic(self, channel_id: int):
+    async def _pick_new_topic(self, channel_id: int) -> QuizTopicEntity:
+        unused_topic = await self.quiz_topic_service.find_unused(channel_id, limit=1)
+        if unused_topic:
+            return unused_topic[0]
+
         used = await self.quiz_topic_service.get_topic_names(channel_id)
         used_block = "\n".join(f"- {t}" for t in used) or "(пока ни одной)"
 

@@ -13,7 +13,7 @@ class DiscardDraftUseCase:
     so we first delete the post (freeing up the topic) and only then the topic itself.
     The reverse order would leave a reference to a non-existent topic in the payload.
 
-    After discarding topic removing from DB.
+    After discarding topic not removing from DB.
     """
 
     def __init__(self, post_service: PostService, quiz_topic_service: QuizTopicService):
