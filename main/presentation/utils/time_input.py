@@ -30,13 +30,13 @@ def parse_when(text: str, tz: ZoneInfo, now: datetime | None = None) -> datetime
 
     raw = " ".join(text.split())
 
-    if match := _TIME_ONLY.match(raw):
+    if match := _TIME_ONLY.fullmatch(raw):
         hour, minutes = _time_parts(match)
         local = _at(now_local.date(), hour, minutes, tz)
         if local <= now_local:
             local = _at(now_local.date() + timedelta(days=1), hour, minutes, tz)
 
-    elif match := _TIME_ONLY.fullmatch(raw):
+    elif match := _DATE_TIME.fullmatch(raw):
         hour, minutes = _time_parts(match)
         day, month = int(match["day"]), int(match["month"])
         year = int(match["year"]) if match["year"] else now_local.year
@@ -63,6 +63,8 @@ def _time_parts(match: re.Match[str]) -> tuple[int, int]:
     hour, minute = int(match.group("hour")), int(match.group("minute"))
     if hour > 23 or minute > 59:
         raise TimeInputError(f"Time out of range: {hour:02d}:{minute:02d}")
+
+    return hour, minute
 
 def _date(year: int, month: int, day: int) -> date:
     try:

@@ -40,7 +40,7 @@ class PostNotDraftError(PostError):
         super().__init__(f"Post (post_id: {post_id!r}) is not a draft or scheduled post.")
 
 class PostNotScheduledError(PostError):
-    user_message = "Publishing started already, cannot reject."
+    user_message = "This post is no longer scheduled."
 
     def __init__(self, post_id: int | None = None) -> None:
         self.post_id = post_id

@@ -6,5 +6,3 @@ class AdminProvideRightsState(StatesGroup):
 
 class AdminChannelActionState(StatesGroup):
     waiting_for_channel = State()
-
-ADMIN_STATES = (AdminProvideRightsState, AdminChannelActionState)

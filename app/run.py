@@ -10,7 +10,7 @@ from dishka.integrations.aiogram import setup_dishka
 from app.container import create_container
 from app.scheduler import run_scheduler
 from core.config import settings, setup_logging
-from main.presentation.handlers import command_router, callback_router, message_router, error_router, admin_router
+from main.presentation.handlers import command_router, menu_router, post_router, error_router, admin_router
 from main.presentation.middlewares import RoleMiddleware
 
 
@@ -25,10 +25,11 @@ async def main() -> None:
     )
     dp = Dispatcher()
 
+    # Order matters: command_router first so no feature router can swallow /quit.
     dp.include_router(error_router)
     dp.include_router(command_router)
-    dp.include_router(callback_router)
-    dp.include_router(message_router)
+    dp.include_router(menu_router)
+    dp.include_router(post_router)
     dp.include_router(admin_router)
 
     container = create_container(bot)
