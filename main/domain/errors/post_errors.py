@@ -25,7 +25,7 @@ class PostAlreadyPublishedError(PostError):
 
         super().__init__(f"Post (post_id: {post_id!r}) was already published.")
 
-class NoMaterialFoundError(PostError):
+class NoSourceFoundError(PostError):
     user_message = "Ничего подходящего не нашлось. Попробуй ещё раз."
 
     def __init__(self, query: str | None = None) -> None:

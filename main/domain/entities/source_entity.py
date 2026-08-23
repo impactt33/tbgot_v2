@@ -11,7 +11,7 @@ class SourceEntity(BaseModel):
     created_at: datetime
     used_in_post: int | None
 
-class AddSourceEntity(SourceEntity):
+class AddSourceEntity(BaseModel):
     channel_id: int
     name: str | None
     url: str

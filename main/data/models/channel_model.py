@@ -12,6 +12,7 @@ from main.domain.entities import ChannelEntity
 
 if TYPE_CHECKING:
     from main.data.models.quiz_topic_model import QuizTopic
+    from main.data.models.source_model import Source
 
 
 class Channel(Base):
@@ -24,6 +25,12 @@ class Channel(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     quiz_topics: Mapped[list[QuizTopic]] = relationship(
+        back_populates="channel",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="raise"
+    )
+    sources: Mapped[list[Source]] = relationship(
         back_populates="channel",
         cascade="all, delete-orphan",
         passive_deletes=True,

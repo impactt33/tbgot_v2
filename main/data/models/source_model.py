@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -5,12 +7,13 @@ from sqlalchemy import Integer, BigInteger, ForeignKey, String, DateTime, func, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship, declared_attr
 
 from core.database import Base
+from main.domain.entities import SourceEntity
 
 if TYPE_CHECKING:
     from main.data.models.channel_model import Channel
 
 
-class SourceModel(Base):
+class Source(Base):
     __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -39,11 +42,12 @@ class SourceModel(Base):
             ),
         )
 
-    def to_entity(self) -> QuizTopicEntity:
-        return QuizTopicEntity(
+    def to_entity(self) -> SourceEntity:
+        return SourceEntity(
             id=self.id,
             channel_id=self.channel_id,
-            topic=self.topic,
+            name=self.name,
+            url=self.url,
             created_at=self.created_at,
-            used_in_post=self.used_in_post,
+            used_in_post=self.used_in_post
         )

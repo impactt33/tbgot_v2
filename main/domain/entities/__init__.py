@@ -3,6 +3,7 @@ from .channel_entity import ChannelEntity, ChannelAddEntity
 from .quiz_topic_entity import QuizTopicAddEntity, QuizTopicEntity
 from .post_entity import PostEntity, PostCreateEntity
 from .payloads import QuizPayload, SourcePayload
+from .source_entity import SourceEntity, AddSourceEntity
 
 __all__ = [
     "UserEntity",
@@ -15,5 +16,7 @@ __all__ = [
     "PostEntity",
     "PostCreateEntity",
     "QuizPayload",
-    "SourcePayload"
+    "SourcePayload",
+    "SourceEntity",
+    "AddSourceEntity"
 ]

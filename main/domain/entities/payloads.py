@@ -13,3 +13,4 @@ class SourcePayload(BaseModel):
     text: str
     url: str
     source_title: str
+    source_id: int | None = None

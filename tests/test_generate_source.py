@@ -2,7 +2,7 @@ import pytest
 
 from main.domain.clients import SearchResult
 from main.domain.enums import AIFailure, PostType
-from main.domain.errors import AIClientRejected, NoMaterialFoundError
+from main.domain.errors import AIClientRejected, NoSourceFoundError
 from main.domain.use_cases.generate_source import (
     GenerateSourcePostRequest,
     GenerateSourcePostUseCase,
@@ -52,7 +52,7 @@ async def test_found_resource_goes_into_second_prompt(posts):
 async def test_empty_search_results(posts):
     ai = FakeAIClient([SearchQueryDraft(query="ничего не найдётся")])
 
-    with pytest.raises(NoMaterialFoundError):
+    with pytest.raises(NoSourceFoundError):
         await GenerateSourcePostUseCase(ai, FakeWebSearch([]), posts)(
             GenerateSourcePostRequest(channel_id=1)
         )

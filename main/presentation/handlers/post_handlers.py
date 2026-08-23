@@ -7,10 +7,10 @@ from dishka import FromDishka
 
 from core.config.settings import Settings
 from core.errors import AppError
-from main.domain.entities import QuizTopicEntity, QuizPayload
+from main.domain.entities import QuizTopicEntity, QuizPayload, SourceEntity, SourcePayload
 from main.domain.enums import PostType, UserRole
 from main.domain.errors import PostNotScheduledError
-from main.domain.services import ChannelService, PostService, QuizTopicService
+from main.domain.services import ChannelService, PostService, QuizTopicService, SourceService
 from main.domain.use_cases import GenerateQuizUseCase, GenerateSourcePostUseCase, PreviewPostUseCase, \
     PublishPostUseCase, DiscardDraftUseCase
 from main.domain.use_cases.generate_quiz import GenerateQuizRequest
@@ -120,6 +120,7 @@ async def regenerate_draft(
     bot: Bot,
     post_service: FromDishka[PostService],
     quiz_topic_service: FromDishka[QuizTopicService],
+    source_service: FromDishka[SourceService],
     generate_quiz: FromDishka[GenerateQuizUseCase],
     generate_source: FromDishka[GenerateSourcePostUseCase],
     preview_post: FromDishka[PreviewPostUseCase]
@@ -130,23 +131,25 @@ async def regenerate_draft(
     post = await post_service.get_by_id(callback_data.post_id)
 
     topic: QuizTopicEntity | None = None
+    source: SourceEntity | None = None
+
     if post.post_type is PostType.QUIZ:
         topic_id = QuizPayload.model_validate(post.payload).topic_id
         topic = await quiz_topic_service.find_by_id(topic_id)
+    else:
+        source_id = SourcePayload.model_validate(post.payload).source_id
+        if source_id is not None:
+            source = await source_service.find_by_id(source_id)
 
-    # delete, not discard, because quiz topic will be removed too.
+    # delete_draft, not discard: discard would remove the quiz topic we want to reuse
     await post_service.delete_draft(post.id)
     await _delete(bot, callback, callback_data.preview_id)
 
     # generating again, retry keyboard if failed.
     await _generate_and_preview(
-        callback,
-        post.channel_id,
-        post.post_type,
-        generate_quiz,
-        generate_source,
-        preview_post,
-        topic
+        callback, post.channel_id, post.post_type,
+        generate_quiz, generate_source, preview_post,
+        topic, source
     )
 
 @post_router.callback_query(DraftCB.filter(F.action == DraftAction.SCHEDULE))
@@ -193,7 +196,8 @@ async def _generate_and_preview(
     generate_quiz: GenerateQuizUseCase,
     generate_source: GenerateSourcePostUseCase,
     preview_post: PreviewPostUseCase,
-    topic: QuizTopicEntity | None = None
+    topic: QuizTopicEntity | None = None,
+    source: SourceEntity | None = None
 ) -> None:
     """Generate, show the preview, offer the actions. Shared by new and regenerate."""
     # Removing keyboard needs to protect from multiple taps.
@@ -203,7 +207,7 @@ async def _generate_and_preview(
         if post_type == PostType.QUIZ:
             post = await generate_quiz(GenerateQuizRequest(channel_id=channel_id, topic=topic))
         else:
-            post = await generate_source(GenerateSourcePostRequest(channel_id=channel_id))
+            post = await generate_source(GenerateSourcePostRequest(channel_id=channel_id, source=source))
 
         preview_id = await preview_post(post.id, callback.from_user.id)
 
