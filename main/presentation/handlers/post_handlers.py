@@ -7,9 +7,10 @@ from dishka import FromDishka
 
 from core.config.settings import Settings
 from core.errors import AppError
-from main.domain.enums import ChannelAction, PostType, UserRole
+from main.domain.entities import QuizTopicEntity, QuizPayload
+from main.domain.enums import PostType, UserRole
 from main.domain.errors import PostNotScheduledError
-from main.domain.services import ChannelService, PostService
+from main.domain.services import ChannelService, PostService, QuizTopicService
 from main.domain.use_cases import GenerateQuizUseCase, GenerateSourcePostUseCase, PreviewPostUseCase, \
     PublishPostUseCase, DiscardDraftUseCase
 from main.domain.use_cases.generate_quiz import GenerateQuizRequest
@@ -118,16 +119,20 @@ async def regenerate_draft(
     callback_data: DraftCB,
     bot: Bot,
     post_service: FromDishka[PostService],
+    quiz_topic_service: FromDishka[QuizTopicService],
     generate_quiz: FromDishka[GenerateQuizUseCase],
     generate_source: FromDishka[GenerateSourcePostUseCase],
     preview_post: FromDishka[PreviewPostUseCase]
 ):
-    logger.info("draft callback: %s", callback.data)
-
     await callback.answer()
 
     # save post data before deleting.
     post = await post_service.get_by_id(callback_data.post_id)
+
+    topic: QuizTopicEntity | None = None
+    if post.post_type is PostType.QUIZ:
+        topic_id = QuizPayload.model_validate(post.payload).topic_id
+        topic = await quiz_topic_service.find_by_id(topic_id)
 
     # delete, not discard, because quiz topic will be removed too.
     await post_service.delete_draft(post.id)
@@ -141,6 +146,7 @@ async def regenerate_draft(
         generate_quiz,
         generate_source,
         preview_post,
+        topic
     )
 
 @post_router.callback_query(DraftCB.filter(F.action == DraftAction.SCHEDULE))
@@ -186,7 +192,8 @@ async def _generate_and_preview(
     post_type: PostType,
     generate_quiz: GenerateQuizUseCase,
     generate_source: GenerateSourcePostUseCase,
-    preview_post: PreviewPostUseCase
+    preview_post: PreviewPostUseCase,
+    topic: QuizTopicEntity | None = None
 ) -> None:
     """Generate, show the preview, offer the actions. Shared by new and regenerate."""
     # Removing keyboard needs to protect from multiple taps.
@@ -194,7 +201,7 @@ async def _generate_and_preview(
 
     try:
         if post_type == PostType.QUIZ:
-            post = await generate_quiz(GenerateQuizRequest(channel_id=channel_id))
+            post = await generate_quiz(GenerateQuizRequest(channel_id=channel_id, topic=topic))
         else:
             post = await generate_source(GenerateSourcePostRequest(channel_id=channel_id))
 
@@ -247,7 +254,7 @@ async def _delete(bot: Bot, callback: CallbackQuery, message_id: int) -> None:
     try:
         await bot.delete_message(callback.message.chat.id, message_id)
     except TelegramAPIError:
-        logger.debug("Could not delete message %s", callback.message.message_id)
+        logger.debug("Could not delete message %s", message_id)
 
 async def _cleanup(bot: Bot, callback: CallbackQuery, preview_id: int) -> None:
     """Remove both the preview and the buttons that acted on it."""

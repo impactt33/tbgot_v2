@@ -29,7 +29,7 @@ async def test_happy_path(posts):
         GenerateSourcePostRequest(channel_id=-100123)
     )
 
-    assert post.post_type is PostType.MATERIAL
+    assert post.post_type is PostType.SOURCES
     assert post.payload["url"] == "https://typescale.com"      # взят первый результат
     assert post.payload["source_title"] == "Type Scale"
     assert post.payload["text"] == DRAFT.text

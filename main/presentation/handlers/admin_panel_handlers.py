@@ -79,7 +79,7 @@ async def provide_role_callback(
     role: UserRole,
     change_user_role: FromDishka[ChangeUserRoleUseCase]
 ):
-    logger.debug(f"Got callback query %s",callback.data)
+    logger.debug("Got callback query %s", callback.data)
 
     new_role = UserRole(callback.data.removeprefix(ROLE_CALLBACK_PREFIX))
 
@@ -135,7 +135,7 @@ async def on_chat_shared(
         try:
             member = await bot.get_chat_member(shared.chat_id, bot.id)
         except TelegramBadRequest:
-            raise BotNotMemberOfChannelError()
+            raise BotNotMemberOfChannelError() from None
 
         if not (isinstance(member, ChatMemberAdministrator) and member.can_post_messages):
             await message.answer(

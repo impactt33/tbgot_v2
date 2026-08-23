@@ -29,6 +29,13 @@ class QuizTopicRepoImpl(QuizTopicRepo):
         )
         return [topic.to_entity() for topic in result.all()]
 
+    async def find_by_id(self, topic_id: int) -> QuizTopicEntity | None:
+        topic: QuizTopic | None = await self.session.scalar(
+            select(QuizTopic)
+            .where(QuizTopic.id == topic_id)
+        )
+        return topic.to_entity() if topic is not None else None
+
     async def add_topic(self, data: QuizTopicAddEntity) -> QuizTopicEntity | None:
         query = (
             insert(QuizTopic)

@@ -23,7 +23,7 @@ class TelegramPublisher(Publisher):
             match post.post_type:
                 case PostType.QUIZ:
                     return await self._publish_quiz(post, chat_id)
-                case PostType.MATERIAL:
+                case PostType.SOURCES:
                     return await self._publish_source(post, chat_id)
                 case _:
                     raise UnsupportedPostTypeError(post.post_type)

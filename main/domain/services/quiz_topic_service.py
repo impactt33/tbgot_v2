@@ -13,6 +13,10 @@ class QuizTopicService(ABC):
         ...
 
     @abstractmethod
+    async def find_by_id(self, topic_id: int) -> QuizTopicEntity | None:
+        ...
+
+    @abstractmethod
     async def add_topic(self, data: QuizTopicAddEntity) -> QuizTopicEntity | None:
         ...
 

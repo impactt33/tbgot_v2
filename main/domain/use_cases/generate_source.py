@@ -83,7 +83,7 @@ class GenerateSourcePostUseCase:
         return await self.post_service.create_draft(
             PostCreateEntity(
                 channel_id=request.channel_id,
-                post_type=PostType.MATERIAL,
+                post_type=PostType.SOURCES,
                 payload={
                     "title": draft.title,
                     "text": draft.text,

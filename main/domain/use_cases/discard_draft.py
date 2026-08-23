@@ -13,7 +13,9 @@ class DiscardDraftUseCase:
     so we first delete the post (freeing up the topic) and only then the topic itself.
     The reverse order would leave a reference to a non-existent topic in the payload.
 
-    After discarding topic not removing from DB.
+    Discard also removes the topic row, so the topic returns to the pool and
+    can be offered again. Regenerate goes through delete_draft instead and
+    keeps the row, so the same topic is reused for the new question.
     """
 
     def __init__(self, post_service: PostService, quiz_topic_service: QuizTopicService):

@@ -14,6 +14,9 @@ class QuizTopicServiceImpl(QuizTopicService):
     async def find_unused(self, channel_id: int, limit: int = 10) -> list[QuizTopicEntity]:
         return await self.quiz_topic_repo.find_unused(channel_id, limit)
 
+    async def find_by_id(self, topic_id: int) -> QuizTopicEntity | None:
+        return await self.quiz_topic_repo.find_by_id(topic_id)
+
     async def add_topic(self, data: QuizTopicAddEntity) -> QuizTopicEntity | None:
         return await self.quiz_topic_repo.add_topic(data)
 

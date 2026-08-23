@@ -1,43 +1,39 @@
-from __future__ import annotations
-
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from datetime import datetime
-
-from sqlalchemy import Integer, ForeignKey, BigInteger, String, DateTime, func, UniqueConstraint, Index
+from sqlalchemy import Integer, BigInteger, ForeignKey, String, DateTime, func, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship, declared_attr
 
 from core.database import Base
-from main.domain.entities import QuizTopicEntity
 
 if TYPE_CHECKING:
     from main.data.models.channel_model import Channel
 
 
-class QuizTopic(Base):
-    __tablename__ = "quiz_topics"
+class SourceModel(Base):
+    __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     channel_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("channels.channel_id", ondelete="CASCADE")
     )
-    topic: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str | None] = mapped_column(String(127))
+    url: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     used_in_post: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("posts.id", ondelete="SET NULL")
     )
-    channel: Mapped[Channel] = relationship(back_populates="quiz_topics")
-
+    channel: Mapped[Channel] = relationship(back_populates="sources")
 
     @declared_attr.directive
     def __table_args__(cls) -> tuple:
         return(
-            UniqueConstraint("channel_id", "topic", name="uq_channel_topic"),
+            UniqueConstraint("channel_id", "url", name="uq_channel_source_url"),
             Index(
-                "ix_quiz_topics_unused",
+                "ix_sources_unused",
                 "channel_id",
                 postgresql_where=cls.used_in_post.is_(None)
             ),
