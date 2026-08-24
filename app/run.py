@@ -1,10 +1,12 @@
 import asyncio
 import contextlib
 import logging
+from datetime import timedelta
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.redis import RedisStorage
 from dishka.integrations.aiogram import setup_dishka
 
 from app.container import create_container
@@ -13,17 +15,24 @@ from core.config import settings, setup_logging
 from main.presentation.handlers import command_router, menu_router, post_router, error_router, admin_router
 from main.presentation.middlewares import RoleMiddleware
 
+FSM_TTL = timedelta(days=1)
 
 async def main() -> None:
     setup_logging(log_level="DEBUG")
     logger = logging.getLogger(__name__)
     logger.info(f"Bot started")
 
+    storage = RedisStorage.from_url(
+        settings.REDIS_URL,
+        state_ttl=FSM_TTL,
+        data_ttl=FSM_TTL
+    )
+
     bot = Bot(
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = Dispatcher()
+    dp = Dispatcher(storage=storage)
 
     # Order matters: command_router first so no feature router can swallow /quit.
     dp.include_router(error_router)
@@ -50,6 +59,7 @@ async def main() -> None:
         with contextlib.suppress(asyncio.CancelledError):
             await scheduler_task
         await container.close()
+        await storage.close()
         await bot.session.close() #type: ignore
 
 

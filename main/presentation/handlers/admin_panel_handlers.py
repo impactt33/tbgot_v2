@@ -124,10 +124,12 @@ async def on_chat_shared(
         return
 
     data = await state.get_data()
-    action = data.get("action")
+    raw_action = data.get("action")
 
-    if action is None:
+    if raw_action is None:
         return
+
+    action = ChannelAction(raw_action)
 
     await state.clear()
 
