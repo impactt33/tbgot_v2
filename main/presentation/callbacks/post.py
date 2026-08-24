@@ -17,6 +17,7 @@ class GenerateCB(CallbackData, prefix="npg"):
     post_type: PostType
 
 class DraftAction(str, Enum):
+    SHOW = "show"
     PUBLISH = "publish"
     SCHEDULE = "schedule"
     REGENERATE = "regenerate"

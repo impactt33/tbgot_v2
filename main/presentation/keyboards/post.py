@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -9,8 +12,9 @@ from main.presentation.callbacks import (
     DraftCB,
     GenerateCB,
     MenuAction,
-    MenuCB,
+    MenuCB, ScheduleCB, SchedulePreset,
 )
+from main.presentation.utils import TIMED_PRESETS, resolve_preset, PRESET_TITLES, format_local
 
 SUPPORTED_POST_TYPES: tuple[PostType, ...] = (PostType.QUIZ, PostType.SOURCES)
 
@@ -79,3 +83,38 @@ def retry_keyboard(channel_id: int, post_type: PostType) -> InlineKeyboardMarkup
     builder.button(text="Back", callback_data=MenuCB(action=MenuAction.ROOT))
     builder.adjust(1)
     return builder.as_markup()
+
+def schedule_preset_keyboard(
+    post_id: int,
+    preview_id: int,
+    tz: ZoneInfo,
+    now: datetime | None = None
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    for preset in TIMED_PRESETS:
+        when = resolve_preset(preset, tz, now)
+        builder.button(
+            text=f"{PRESET_TITLES[preset]} · {format_local(when, tz)}",
+            callback_data=ScheduleCB(preset=preset, post_id=post_id, preview_id=preview_id)
+        )
+
+    builder.button(
+        text=PRESET_TITLES[SchedulePreset.MANUAL],
+        callback_data=ScheduleCB(preset=SchedulePreset.MANUAL, post_id=post_id, preview_id=preview_id)
+    )
+
+    builder.button(text="Back", callback_data=_back_to_draft(post_id, preview_id))
+    builder.adjust(1)
+    return builder.as_markup()
+
+def back_to_draft_keyboard(post_id: int, preview_id: int) -> InlineKeyboardMarkup:
+    """The only way out from manual entering time."""
+    builder = InlineKeyboardBuilder()
+
+    builder.button(text="Back", callback_data=_back_to_draft(post_id, preview_id))
+    builder.adjust(1)
+    return builder.as_markup()
+
+def _back_to_draft(post_id: int, preview_id: int) -> DraftCB:
+    return DraftCB(action=DraftAction.SHOW, post_id=post_id, preview_id=preview_id)

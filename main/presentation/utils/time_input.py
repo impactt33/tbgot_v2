@@ -55,6 +55,17 @@ def parse_when(text: str, tz: ZoneInfo, now: datetime | None = None) -> datetime
 
     return when_utc
 
+def in_hours(hours: int, now: datetime | None = None) -> datetime:
+    now_utc = now if now is not None else datetime.now(UTC)
+
+    return (now_utc + timedelta(hours=hours)).replace(second=0, microsecond=0)
+
+def next_day_at(hour: int, minute: int, tz: ZoneInfo, now: datetime | None = None) -> datetime:
+    now_utc = now if now is not None else datetime.now(UTC)
+    tomorrow = now_utc.astimezone(tz).date() + timedelta(days=1)
+
+    return _at(tomorrow, hour, minute, tz).astimezone(UTC)
+
 def format_local(when: datetime, tz: ZoneInfo) -> str:
     """UTC from DB -> str with tz for scheduled list."""
     return when.astimezone(tz).strftime(DISPLAY_FORMAT)

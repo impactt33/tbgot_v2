@@ -1,8 +1,10 @@
 import logging
+from datetime import datetime
 
 from aiogram import F, Router, Bot
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import CallbackQuery, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message, InaccessibleMessage, ReplyKeyboardRemove
 from dishka import FromDishka
 
 from core.config.settings import Settings
@@ -16,11 +18,14 @@ from main.domain.use_cases import GenerateQuizUseCase, GenerateSourcePostUseCase
 from main.domain.use_cases.generate_quiz import GenerateQuizRequest
 from main.domain.use_cases.generate_source import GenerateSourcePostRequest
 from main.presentation.callbacks import MenuAction, MenuCB, ScheduledAction, ScheduledCB, ChannelCB, GenerateCB, \
-    DraftCB, DraftAction
+    DraftCB, DraftAction, ScheduleCB, SchedulePreset
+from main.presentation.errors import TimeInputError
 from main.presentation.filters import HasAccessFilter
 from main.presentation.keyboards import back_to_menu_keyboard, scheduled_posts_keyboard, channels_keyboard, \
-    post_types_keyboard, retry_keyboard, draft_actions_keyboard, main_menu_keyboard
-from main.presentation.utils import render
+    post_types_keyboard, retry_keyboard, draft_actions_keyboard, main_menu_keyboard, schedule_preset_keyboard, \
+    back_to_draft_keyboard
+from main.presentation.states import CreatePostState
+from main.presentation.utils import render, resolve_preset, format_local, parse_when
 
 post_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
@@ -36,6 +41,16 @@ DRAFT_TEXT = "Draft is above. What do we do with it?"
 MENU_TEXT = "What do you want to do?"
 SCHEDULED_TEXT = "Scheduled posts. Tap one to cancel its publication."
 NOTHING_SCHEDULED_TEXT = "Nothing is scheduled right now."
+
+CHOOSE_TIME_TEXT = "When should it go out?"
+ENTER_TIME_TEXT = (
+    "Send the time:\n"
+    "18:00 — today or tomorrow\n"
+    "25.12 18:00 — day and month\n"
+    "25.12.2026 18:00 — including the year\n\n"
+    "/quit to cancel."
+)
+STATE_LOST_TEXT = "I lost track of that draft. It is still in drafts, start over from the menu."
 
 # ------------------------------ GENERATING ------------------------------
 
@@ -143,7 +158,7 @@ async def regenerate_draft(
 
     # delete_draft, not discard: discard would remove the quiz topic we want to reuse
     await post_service.delete_draft(post.id)
-    await _delete(bot, callback, callback_data.preview_id)
+    await _cleanup_preview(bot, callback, callback_data.preview_id)
 
     # generating again, retry keyboard if failed.
     await _generate_and_preview(
@@ -152,11 +167,116 @@ async def regenerate_draft(
         topic, source
     )
 
-@post_router.callback_query(DraftCB.filter(F.action == DraftAction.SCHEDULE))
-async def schedule_draft(callback: CallbackQuery) -> None:
-    await callback.answer("Not implemented yet", show_alert=True)
+@post_router.callback_query(DraftCB.filter(F.action == DraftAction.SHOW))
+async def show_draft_actions(
+    callback: CallbackQuery,
+    callback_data: DraftCB,
+    state: FSMContext
+):
+    """Back from the manual entering time screen."""
+    await callback.answer()
+    await state.clear()
+    await render(
+        callback,
+        DRAFT_TEXT,
+        draft_actions_keyboard(callback_data.post_id, callback_data.preview_id)
+    )
 
-# ------------------------------ SCHEDULE ------------------------------
+# ------------------------------ SCHEDULE A DRAFT ------------------------------
+
+@post_router.callback_query(DraftCB.filter(F.action == DraftAction.SCHEDULE))
+async def schedule_draft(
+    callback: CallbackQuery,
+    callback_data: DraftCB,
+    settings: FromDishka[Settings]
+):
+    await callback.answer()
+    await render(
+        callback,
+        CHOOSE_TIME_TEXT,
+        schedule_preset_keyboard(callback_data.post_id, callback_data.preview_id, settings.user_tz)
+    )
+
+@post_router.callback_query(ScheduleCB.filter(F.preset != SchedulePreset.MANUAL))
+async def schedule_at_preset(
+    callback: CallbackQuery,
+    callback_data: ScheduleCB,
+    bot: Bot,
+    role: UserRole,
+    settings: FromDishka[Settings],
+    post_service: FromDishka[PostService]
+):
+    when = resolve_preset(callback_data.preset, settings.user_tz)
+
+    await post_service.schedule(callback_data.post_id, when)
+
+    await callback.answer("Scheduled.")
+    await _cleanup(bot, callback, callback_data.preview_id)
+    await _confirm(callback.message, when, settings, role)
+
+@post_router.callback_query(ScheduleCB.filter(F.preset == SchedulePreset.MANUAL))
+async def ask_for_time(
+    callback: CallbackQuery,
+    callback_data: ScheduleCB,
+    state: FSMContext
+):
+    await callback.answer()
+
+    if not isinstance(callback.message, Message):
+        await callback.answer("This menu is too old, send /menu again.", show_alert=True)
+        return
+
+    await render(
+        callback,
+        ENTER_TIME_TEXT,
+        back_to_draft_keyboard(callback_data.post_id, callback_data.preview_id)
+    )
+    await state.set_state(CreatePostState.waiting_for_time)
+    await state.update_data(
+        post_id=callback_data.post_id,
+        preview_id=callback_data.preview_id,
+        prompt_id=callback.message.message_id
+    )
+
+@post_router.message(CreatePostState.waiting_for_time, F.text)
+async def receive_time(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole,
+    settings: FromDishka[Settings],
+    post_service: FromDishka[PostService]
+):
+    data = await state.get_data()
+    post_id: int | None = data.get("post_id")
+
+    if post_id is None:
+        # MemoryStorage: a restart keeps the state but drops what it was about.
+        await state.clear()
+        await message.answer(STATE_LOST_TEXT, reply_markup=main_menu_keyboard(role))
+        return
+
+    try:
+        when = parse_when(message.text or "", settings.user_tz)
+    except TimeInputError as err:
+        logger.debug("Unusable time in chat %s: %s", message.chat.id, err.detail)
+        await message.answer(err.user_message)
+        return
+
+    try:
+        await post_service.schedule(post_id, when)
+    except AppError as err:
+        logger.warning("Could not schedule post %s: %s", post_id, err.detail)
+        await state.clear()
+        await message.answer(err.user_message, reply_markup=main_menu_keyboard(role))
+        return
+
+    await state.clear()
+    await _delete(bot, message.chat.id, data.get("prompt_id"))
+    await _delete(bot, message.chat.id, data.get("preview_id"))
+    await _confirm(message, when, settings, role)
+
+# ------------------------------ SCHEDULED ------------------------------
 
 @post_router.callback_query(MenuCB.filter(F.action == MenuAction.SCHEDULED))
 async def show_scheduled(
@@ -252,15 +372,35 @@ async def _drop(message: Message | None) -> None:
     except TelegramAPIError:
         logger.debug("Could not delete message %s", message.message_id)
 
-async def _delete(bot: Bot, callback: CallbackQuery, message_id: int) -> None:
-    if not isinstance(callback.message, Message):
+async def _cleanup_preview(bot: Bot, callback: CallbackQuery, preview_id: int) -> None:
+    """Drop only preview, keeping the message buttons live on."""
+    if isinstance(callback.message, Message):
+        await _delete(bot, callback.message.chat.id, preview_id)
+
+async def _delete(bot: Bot, chat_id: int, message_id: int | None) -> None:
+    """Delete by id, for messages we no longer hold an object for."""
+    if message_id is None:
         return
     try:
-        await bot.delete_message(callback.message.chat.id, message_id)
+        await bot.delete_message(chat_id, message_id)
     except TelegramAPIError:
         logger.debug("Could not delete message %s", message_id)
 
 async def _cleanup(bot: Bot, callback: CallbackQuery, preview_id: int) -> None:
     """Remove both the preview and the buttons that acted on it."""
-    await _delete(bot, callback, preview_id)
+    if isinstance(callback.message, Message):
+        await _delete(bot, callback.message.chat.id, preview_id)
     await _drop(callback.message) # type: ignore
+
+async def _confirm(
+    message: Message | InaccessibleMessage | None,
+    when: datetime,
+    settings: Settings,
+    role: UserRole
+) -> None:
+    if not isinstance(message, Message):
+        return
+    await message.answer(
+        f"Scheduled for {format_local(when, settings.user_tz)}.",
+        reply_markup=main_menu_keyboard(role)
+    )
