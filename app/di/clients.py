@@ -9,6 +9,7 @@ from main.data.clients_impl.ai.gemini_ai_client import GeminiAIClient
 from main.data.clients_impl.telegram.telegram_publisher import TelegramPublisher
 from main.data.clients_impl.web_search.serper_web_search_client import SerperWebSearchClient
 from main.domain.clients import AIClient, WebSearchClient, Publisher
+from main.presentation.utils.media_group import MediaGroupCollector
 
 
 class ClientProvider(Provider):
@@ -34,3 +35,9 @@ class ClientProvider(Provider):
         self, settings: Settings, http_client: httpx.AsyncClient
     ) -> WebSearchClient:
         return SerperWebSearchClient(api_key=settings.SERPER_API_KEY, http_client=http_client)
+
+    @provide
+    def media_group_collector(self) -> MediaGroupCollector:
+        """APP scope, not REQUEST: the parts of one album arrive as separate
+        updates, so a per-request collector would never see more than one."""
+        return MediaGroupCollector()

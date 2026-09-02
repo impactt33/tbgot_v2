@@ -12,7 +12,7 @@ from main.presentation.callbacks import (
     DraftCB,
     GenerateCB,
     MenuAction,
-    MenuCB, ScheduleCB, SchedulePreset,
+    MenuCB, ScheduleCB, SchedulePreset, CustomChannelCB,
 )
 from main.presentation.utils import TIMED_PRESETS, resolve_preset, PRESET_TITLES, format_local
 
@@ -59,18 +59,49 @@ def post_types_keyboard(channel_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def draft_actions_keyboard(post_id: int, preview_id: int) -> InlineKeyboardMarkup:
+def draft_actions_keyboard(
+    post_id: int,
+    preview_id: int,
+    allow_regenerate: bool = True,
+    preview_count: int = 1
+) -> InlineKeyboardMarkup:
+    """Actions on a fresh draft.
+
+    A hand-written post has nothing to regenerate — there is no topic or source
+    behind it — so the button is dropped rather than left to fail on tap.
+    """
     builder = InlineKeyboardBuilder()
 
     for action, title in DRAFT_ACTION_TITLES:
         builder.button(
             text=title,
-            callback_data=DraftCB(action=action, post_id=post_id, preview_id=preview_id)
+            callback_data=DraftCB(
+                action=action,
+                post_id=post_id,
+                preview_id=preview_id,
+                preview_count=preview_count
+            )
         )
 
     builder.adjust(2)
     return builder.as_markup()
 
+def custom_channels_keyboard(channels: list[ChannelEntity]) -> InlineKeyboardMarkup:
+    """Same list as channel_keyboard, but pointed at the hand-written flow."""
+    builder = InlineKeyboardBuilder()
+
+    for channel in channels:
+        builder.button(
+            text=channel.title or channel.username or str(channel.channel_id),
+            callback_data=CustomChannelCB(channel_id=channel.channel_id)
+        )
+
+    builder.button(
+        text="Back",
+        callback_data=MenuCB(action=MenuAction.ROOT)
+    )
+    builder.adjust(1)
+    return builder.as_markup()
 
 def retry_keyboard(channel_id: int, post_type: PostType) -> InlineKeyboardMarkup:
     """Shown when generation failed: the screen must not become a dead end."""
@@ -116,5 +147,10 @@ def back_to_draft_keyboard(post_id: int, preview_id: int) -> InlineKeyboardMarku
     builder.adjust(1)
     return builder.as_markup()
 
-def _back_to_draft(post_id: int, preview_id: int) -> DraftCB:
-    return DraftCB(action=DraftAction.SHOW, post_id=post_id, preview_id=preview_id)
+def _back_to_draft(post_id: int, preview_id: int, preview_count: int = 1) -> DraftCB:
+    return DraftCB(
+        action=DraftAction.SHOW,
+        post_id=post_id,
+        preview_id=preview_id,
+        preview_count=preview_count
+    )

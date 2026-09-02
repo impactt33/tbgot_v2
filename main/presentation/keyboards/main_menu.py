@@ -10,6 +10,10 @@ def main_menu_keyboard(role: UserRole) -> InlineKeyboardMarkup:
 
     builder.button(text="Create post", callback_data=MenuCB(action=MenuAction.NEW_POST))
     builder.button(
+        text="Add created post",
+        callback_data=MenuCB(action=MenuAction.ADD_CUSTOM)
+    )
+    builder.button(
         text="Scheduled posts",
         callback_data=MenuCB(action=MenuAction.SCHEDULED)
     )

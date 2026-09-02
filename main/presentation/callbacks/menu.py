@@ -8,6 +8,7 @@ class MenuAction(str, Enum):
 
     ROOT = "root"
     NEW_POST = "new_post"
+    ADD_CUSTOM = "add_custom"
     SCHEDULED = "scheduled"
     ADMIN = "admin"
     PROVIDE_RIGHTS = "rights"
