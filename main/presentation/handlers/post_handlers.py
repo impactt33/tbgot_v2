@@ -15,17 +15,19 @@ from main.domain.errors import PostNotScheduledError
 from main.domain.services import ChannelService, PostService, QuizTopicService, SourceService
 from main.domain.use_cases import GenerateQuizUseCase, GenerateSourcePostUseCase, PreviewPostUseCase, \
     PublishPostUseCase, DiscardDraftUseCase
+from main.domain.use_cases.create_custom_post import CreateCustomPostUseCase, CreateCustomPostRequest
 from main.domain.use_cases.generate_quiz import GenerateQuizRequest
 from main.domain.use_cases.generate_source import GenerateSourcePostRequest
 from main.presentation.callbacks import MenuAction, MenuCB, ScheduledAction, ScheduledCB, ChannelCB, GenerateCB, \
-    DraftCB, DraftAction, ScheduleCB, SchedulePreset
-from main.presentation.errors import TimeInputError
+    DraftCB, DraftAction, ScheduleCB, SchedulePreset, CustomChannelCB
+from main.presentation.errors import TimeInputError, PostInputError
 from main.presentation.filters import HasAccessFilter
 from main.presentation.keyboards import back_to_menu_keyboard, scheduled_posts_keyboard, channels_keyboard, \
     post_types_keyboard, retry_keyboard, draft_actions_keyboard, main_menu_keyboard, schedule_preset_keyboard, \
-    back_to_draft_keyboard
-from main.presentation.states import CreatePostState
+    back_to_draft_keyboard, custom_channels_keyboard
+from main.presentation.states import CreatePostState, CustomPostState
 from main.presentation.utils import render, resolve_preset, format_local, parse_when
+from main.presentation.utils.post_input import build_custom_payload
 
 post_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
@@ -51,6 +53,14 @@ ENTER_TIME_TEXT = (
     "/quit to cancel."
 )
 STATE_LOST_TEXT = "I lost track of that draft. It is still in drafts, start over from the menu."
+CUSTOM_CHOOSE_CHANNEL_TEXT = "Which channel is this post for?"
+SEND_POST_TEXT = (
+    "Send me the post exactly as it should go out - text, or a photo with a caption.\n"
+    "Formatting is kept as you write it.\n\n"
+    "/quit to cancel."
+)
+CUSTOM_STATE_LOST_TEXT = "I lost track of which channel that was for. Start again from the menu."
+CANNOT_REGENERATE_TEXT = "This post was written by hand - there is nothing to regenerate."
 
 # ------------------------------ GENERATING ------------------------------
 
@@ -275,6 +285,86 @@ async def receive_time(
     await _delete(bot, message.chat.id, data.get("prompt_id"))
     await _delete(bot, message.chat.id, data.get("preview_id"))
     await _confirm(message, when, settings, role)
+
+# ------------------------------ CUSTOM POST ------------------------------
+
+@post_router.callback_query(MenuCB.filter(F.action == MenuAction.ADD_CUSTOM))
+async def choose_channel_for_custom(
+    callback: CallbackQuery,
+    channel_service: FromDishka[ChannelService]
+):
+    channels = await channel_service.list_channels()
+
+    await callback.answer()
+
+    if not channels:
+        await render(callback, NO_CHANNELS_TEXT, back_to_menu_keyboard())
+        return
+
+    await render(callback, CUSTOM_CHOOSE_CHANNEL_TEXT, custom_channels_keyboard(channels))
+
+@post_router.callback_query(CustomChannelCB.filter())
+async def ask_for_custom_post(
+    callback: CallbackQuery,
+    callback_data: CustomChannelCB,
+    state: FSMContext
+):
+    await callback.answer()
+
+    if not isinstance(callback.message, Message):
+        await callback.answer("This menu is too old, send /menu again.", show_alert=True)
+        return
+
+    await render(callback, SEND_POST_TEXT, back_to_menu_keyboard())
+    await state.set_state(CustomPostState.waiting_for_post)
+    await state.update_data(
+        channel_id=callback_data.channel_id,
+        prompt_id=callback.message.message_id
+    )
+
+async def _store_custom_post(
+    parts: list[Message],
+    channel_id: int,
+    prompt_id: int,
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole,
+    create_custom_post: FromDishka[CreateCustomPostUseCase],
+    preview_post: FromDishka[PreviewPostUseCase]
+) -> None:
+    """Validate, store, preview. Shared by the single-message and album paths."""
+    try:
+        payload = build_custom_payload(parts)
+    except PostInputError as err:
+        # Same reasoning as a bad time: the admin just sends another message.
+        # So thr state stays open.
+        logger.debug("Unusable custom post in chat %s: %s", message.chat.id, err.detail)
+        await message.answer(err.user_message)
+        return
+
+    try:
+        post = await create_custom_post(
+            CreateCustomPostRequest(channel_id=channel_id, payload=payload)
+        )
+        preview_id = await preview_post(post.id, message.chat.id)
+
+    except AppError as err:
+        logger.warning("Could not store custom post for channel %s: %s", channel_id, err.detail)
+        await state.clear()
+        await message.answer(err.user_message, reply_markup=main_menu_keyboard(role))
+        return
+
+    preview_count = max(len(payload.photo_file_ids), 1)
+
+    await state.clear()
+    await _delete(bot, message.chat.id, prompt_id)
+    await message.answer(
+        DRAFT_TEXT,
+        reply_markup=draft_actions_keyboard(
+            post.id, preview_id, allow_regenerate=False, preview_count=preview_count
+        )
+    )
 
 # ------------------------------ SCHEDULED ------------------------------
 
