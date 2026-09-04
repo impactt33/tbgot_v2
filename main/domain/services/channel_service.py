@@ -29,5 +29,11 @@ class ChannelService(ABC):
         ...
 
     @abstractmethod
+    async def set_storage_channel(
+        self, channel_id: int, storage_channel_id: int | None
+    ) -> ChannelEntity:
+        """Raises ChannelNotFoundError."""
+
+    @abstractmethod
     async def list_channels(self) -> list[ChannelEntity]:
         ...

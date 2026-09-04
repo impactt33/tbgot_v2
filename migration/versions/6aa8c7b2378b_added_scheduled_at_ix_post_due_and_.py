@@ -32,6 +32,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Same set: the previous revision already had all five. This migration only
-    # repairs drift, so its downgrade has nothing to narrow.
-    pass
+    """Undo everything upgrade() did, in reverse order."""
+    op.drop_constraint("poststatus", "posts", type_="check")
+    op.create_check_constraint(
+        "poststatus", "posts",
+        "status IN ('DRAFT', 'PUBLISHED', 'FAILED')",
+    )
+    op.drop_index('ix_posts_due', table_name='posts', postgresql_where=sa.text("status = 'SCHEDULED'"))
+    op.drop_column('posts', 'scheduled_at')

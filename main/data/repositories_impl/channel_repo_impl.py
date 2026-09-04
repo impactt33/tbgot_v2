@@ -1,4 +1,4 @@
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,6 +50,18 @@ class ChannelRepoImpl(ChannelRepo):
         await self.session.commit()
 
         return removed_channel.to_entity() if removed_channel is not None else None
+
+    async def set_storage_channel(
+        self, channel_id: int, storage_channel_id: int | None
+    ) -> ChannelEntity | None:
+        channel: Channel | None = await self.session.scalar(
+            update(Channel)
+            .where(Channel.channel_id == channel_id)
+            .values(storage_channel_id=storage_channel_id)
+            .returning(Channel)
+        )
+        await self.session.commit()
+        return channel.to_entity() if channel is not None else None
 
     async def list_all(self) -> list[ChannelEntity]:
         query = (

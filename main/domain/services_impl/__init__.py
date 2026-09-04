@@ -3,3 +3,4 @@ from .channel_service_impl import ChannelServiceImpl
 from .post_service_impl import PostServiceImpl
 from .quiz_topic_service_impl import QuizTopicServiceImpl
 from .source_service_impl import SourceServiceImpl
+from .material_service_impl import MaterialServiceImpl

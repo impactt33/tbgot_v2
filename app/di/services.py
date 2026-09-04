@@ -1,8 +1,9 @@
 from dishka import Provider, Scope, provide
 
-from main.domain.services import UserService, QuizTopicService, SourceService, ChannelService, PostService
+from main.domain.services import UserService, QuizTopicService, SourceService, ChannelService, PostService, \
+    MaterialService
 from main.domain.services_impl import UserServiceImpl, ChannelServiceImpl, QuizTopicServiceImpl, PostServiceImpl, \
-    SourceServiceImpl
+    SourceServiceImpl, MaterialServiceImpl
 
 
 class ServiceProvider(Provider):
@@ -13,3 +14,4 @@ class ServiceProvider(Provider):
     quiz_topic_service = provide(QuizTopicServiceImpl, provides=QuizTopicService)
     post_service = provide(PostServiceImpl, provides=PostService)
     source_service = provide(SourceServiceImpl, provides=SourceService)
+    material_service = provide(MaterialServiceImpl, provides=MaterialService)

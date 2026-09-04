@@ -30,6 +30,10 @@ class PostService(ABC):
         ...
 
     @abstractmethod
+    async def claim_for_publishing(self, post_id: int) -> PostEntity:
+        ...
+
+    @abstractmethod
     async def schedule(self, post_id: int, when: datetime) -> PostEntity:
         ...
 

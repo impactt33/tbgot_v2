@@ -50,5 +50,15 @@ class ChannelServiceImpl(ChannelService):
 
         return removed_channel
 
+    async def set_storage_channel(
+        self, channel_id: int, storage_channel_id: int | None
+    ) -> ChannelEntity:
+        channel = await self.channel_repo.set_storage_channel(channel_id, storage_channel_id)
+
+        if channel is None:
+            raise ChannelNotFoundError(channel_id=channel_id)
+
+        return channel
+
     async def list_channels(self) -> list[ChannelEntity]:
         return await self.channel_repo.list_all()

@@ -2,6 +2,7 @@ import logging
 
 from main.domain.entities import PostEntity, QuizPayload, SourcePayload
 from main.domain.enums import PostType
+from main.domain.errors import UnsupportedPostTypeError
 from main.domain.services import PostService, QuizTopicService, SourceService
 
 logger = logging.getLogger(__name__)
@@ -34,10 +35,16 @@ class DiscardDraftUseCase:
         topic_id: int | None = None
         source_id: int | None = None
 
-        if post.post_type is PostType.QUIZ:
-            topic_id = QuizPayload.model_validate(post.payload).topic_id
-        else:
-            source_id = SourcePayload.model_validate(post.payload).source_id
+        match post.post_type:
+            case PostType.QUIZ:
+                topic_id = QuizPayload.model_validate(post.payload).topic_id
+            case PostType.SOURCES:
+                source_id = SourcePayload.model_validate(post.payload).source_id
+            case PostType.CUSTOM:
+                # nothing behind a hand-written post: no topic row, no source row.
+                pass
+            case _:
+                raise UnsupportedPostTypeError(post.post_type)
 
         deleted = await self.post_service.delete_draft(post_id)
 

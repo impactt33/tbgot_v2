@@ -1,7 +1,8 @@
 from dishka import Provider, Scope, provide
 
-from main.data.repositories_impl import UserRepoImpl, ChannelRepoImpl, QuizTopicRepoImpl, PostRepoImpl, SourceRepoImpl
-from main.domain.repositories import UserRepo, ChannelRepo, QuizTopicRepo, PostRepo, SourceRepo
+from main.data.repositories_impl import UserRepoImpl, ChannelRepoImpl, QuizTopicRepoImpl, PostRepoImpl, \
+    SourceRepoImpl, MaterialRepoImpl
+from main.domain.repositories import UserRepo, ChannelRepo, QuizTopicRepo, PostRepo, SourceRepo, MaterialRepo
 
 
 class RepoProvider(Provider):
@@ -12,3 +13,4 @@ class RepoProvider(Provider):
     quiz_topic_repo = provide(QuizTopicRepoImpl, provides=QuizTopicRepo)
     post_repo = provide(PostRepoImpl, provides=PostRepo)
     source_repo = provide(SourceRepoImpl, provides=SourceRepo)
+    material_repo = provide(MaterialRepoImpl, provides=MaterialRepo)

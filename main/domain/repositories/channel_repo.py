@@ -21,5 +21,11 @@ class ChannelRepo(ABC):
         ...
 
     @abstractmethod
+    async def set_storage_channel(
+        self, channel_id: int, storage_channel_id: int | None
+    ) -> ChannelEntity | None:
+        """Bind (or, with None, unbind) the storage channel. None if no such channel."""
+
+    @abstractmethod
     async def list_all(self) -> list[ChannelEntity]:
         ...

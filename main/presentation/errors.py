@@ -57,3 +57,4 @@ class PostInputTooManyPhotosError(PostInputError):
         self.user_message = (
             f"There are too many photos ({length} from allowed {limit}) in your post."
         )
+        super().__init__(f"Custom post has too many photos: {length} > {limit}.")

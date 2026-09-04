@@ -1,7 +1,8 @@
 from datetime import datetime
 
 from main.domain.entities import PostEntity, PostCreateEntity
-from main.domain.errors import PostNotFoundError, PostWasNotCreated, PostNotDraftError, PostNotScheduledError
+from main.domain.errors import PostNotFoundError, PostWasNotCreated, PostNotDraftError, PostNotScheduledError, \
+    PostNotClaimedError
 from main.domain.repositories import PostRepo
 from main.domain.services.post_service import PostService
 
@@ -28,7 +29,7 @@ class PostServiceImpl(PostService):
         post = await self.post_repo.mark_published(post_id, telegram_message_id)
 
         if post is None:
-            raise PostNotFoundError(post_id)
+            raise PostNotClaimedError(post_id)
 
         return post
 
@@ -42,6 +43,15 @@ class PostServiceImpl(PostService):
 
     async def claim_due(self, limit: int = 10) -> list[PostEntity]:
         return await self.post_repo.claim_scheduled(limit)
+
+    async def claim_for_publishing(self, post_id: int) -> PostEntity:
+        """Raises PostNotDraftError if there was nothing left to claim."""
+        post = await self.post_repo.claim_for_publishing(post_id)
+
+        if post is None:
+            raise PostNotDraftError(post_id)
+
+        return post
 
     async def schedule(self, post_id: int, when: datetime) -> PostEntity:
         post = await self.post_repo.schedule(post_id, when)

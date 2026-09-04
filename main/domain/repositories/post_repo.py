@@ -32,6 +32,14 @@ class PostRepo(ABC):
         ...
 
     @abstractmethod
+    async def claim_for_publishing(self, post_id: int) -> PostEntity | None:
+        """DRAFT/SCHEDULED -> PUBLISHING in one statement.
+
+        None, if there was nothing to claim: someone published it already, or
+        the scheduler took it a moment ago.
+        """
+
+    @abstractmethod
     async def schedule(self, post_id: int, when: datetime) -> PostEntity | None:
         """None, if post not in DRAFT/SCHEDULED."""
 

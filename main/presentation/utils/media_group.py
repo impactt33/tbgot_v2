@@ -32,15 +32,21 @@ class MediaGroupCollector:
         group_id = message.media_group_id
 
         if group_id is None:
-            return [message]
+            return [message] # in fact this code is unreachable, because it used once with magic filter on media_group_id in post_handlers
 
         if group_id in self._groups:
             self._groups[group_id].append(message)
             return None
 
         self._groups[group_id] = [message]
-        await asyncio.sleep(self._settle_delay)
-        parts = self._groups.pop(group_id, [])
+
+        # The sleep is a cancellation point, and this task owns the bucket:
+        # on shutdown the pop has to happen anyway, or the bucket stays for
+        # good and a repeated media_group_id would land in a dead one.
+        try:
+            await asyncio.sleep(self._settle_delay)
+        finally:
+            parts = self._groups.pop(group_id, [])
 
         parts.sort(key=lambda part: part.message_id)
         logger.debug("Album %s settled with %d parts", group_id, len(parts))

@@ -23,7 +23,7 @@ class DraftAction(str, Enum):
     REGENERATE = "regenerate"
     DISCARD = "discard"
 
-class DraftCB(CallbackData, prefix="npd"):
+class DraftCB(CallbackData, prefix="npd2"):
     """Action on a freshly built draft.
 
     preview_id rides along so the handler can delete the preview message

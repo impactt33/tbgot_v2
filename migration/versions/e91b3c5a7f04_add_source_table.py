@@ -44,5 +44,3 @@ def downgrade() -> None:
     op.drop_index('ix_sources_unused', table_name='sources',
                   postgresql_where=sa.text('used_in_post IS NULL'))
     op.drop_table('sources')
-
-    op.drop_constraint("poststatus", "posts", type_="check")

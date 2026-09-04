@@ -119,7 +119,8 @@ def schedule_preset_keyboard(
     post_id: int,
     preview_id: int,
     tz: ZoneInfo,
-    now: datetime | None = None
+    now: datetime | None = None,
+    preview_count: int = 1
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
@@ -127,23 +128,39 @@ def schedule_preset_keyboard(
         when = resolve_preset(preset, tz, now)
         builder.button(
             text=f"{PRESET_TITLES[preset]} · {format_local(when, tz)}",
-            callback_data=ScheduleCB(preset=preset, post_id=post_id, preview_id=preview_id)
+            callback_data=ScheduleCB(
+                preset=preset,
+                post_id=post_id,
+                preview_id=preview_id,
+                preview_count=preview_count
+            )
         )
 
     builder.button(
         text=PRESET_TITLES[SchedulePreset.MANUAL],
-        callback_data=ScheduleCB(preset=SchedulePreset.MANUAL, post_id=post_id, preview_id=preview_id)
+        callback_data=ScheduleCB(
+            preset=SchedulePreset.MANUAL,
+            post_id=post_id,
+            preview_id=preview_id,
+            preview_count=preview_count
+        )
     )
 
-    builder.button(text="Back", callback_data=_back_to_draft(post_id, preview_id))
+    builder.button(
+        text="Back", callback_data=_back_to_draft(post_id, preview_id, preview_count)
+    )
     builder.adjust(1)
     return builder.as_markup()
 
-def back_to_draft_keyboard(post_id: int, preview_id: int) -> InlineKeyboardMarkup:
+def back_to_draft_keyboard(
+    post_id: int, preview_id: int, preview_count: int = 1
+) -> InlineKeyboardMarkup:
     """The only way out from manual entering time."""
     builder = InlineKeyboardBuilder()
 
-    builder.button(text="Back", callback_data=_back_to_draft(post_id, preview_id))
+    builder.button(
+        text="Back", callback_data=_back_to_draft(post_id, preview_id, preview_count)
+    )
     builder.adjust(1)
     return builder.as_markup()
 

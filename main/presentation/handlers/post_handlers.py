@@ -4,14 +4,14 @@ from datetime import datetime
 from aiogram import F, Router, Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InaccessibleMessage, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, Message, InaccessibleMessage
 from dishka import FromDishka
 
 from core.config.settings import Settings
 from core.errors import AppError
 from main.domain.entities import QuizTopicEntity, QuizPayload, SourceEntity, SourcePayload
 from main.domain.enums import PostType, UserRole
-from main.domain.errors import PostNotScheduledError
+from main.domain.errors import PostNotScheduledError, UnsupportedPostTypeError
 from main.domain.services import ChannelService, PostService, QuizTopicService, SourceService
 from main.domain.use_cases import GenerateQuizUseCase, GenerateSourcePostUseCase, PreviewPostUseCase, \
     PublishPostUseCase, DiscardDraftUseCase
@@ -26,7 +26,7 @@ from main.presentation.keyboards import back_to_menu_keyboard, scheduled_posts_k
     post_types_keyboard, retry_keyboard, draft_actions_keyboard, main_menu_keyboard, schedule_preset_keyboard, \
     back_to_draft_keyboard, custom_channels_keyboard
 from main.presentation.states import CreatePostState, CustomPostState
-from main.presentation.utils import render, resolve_preset, format_local, parse_when
+from main.presentation.utils import render, resolve_preset, format_local, parse_when, MediaGroupCollector
 from main.presentation.utils.post_input import build_custom_payload
 
 post_router = Router(name=__name__)
@@ -115,7 +115,7 @@ async def publish_draft(
     post = await publish_post(callback_data.post_id)
 
     await callback.answer("Published.")
-    await _cleanup(bot, callback, callback_data.preview_id)
+    await _cleanup(bot, callback, callback_data.preview_id, callback_data.preview_count)
 
     channel = await channel_service.find_channel_by_id(post.channel_id)
     title = channel.title if channel is not None else str(post.channel_id)
@@ -135,7 +135,7 @@ async def discard_draft(
     await discard(callback_data.post_id)
 
     await callback.answer("Draft discarded.")
-    await _cleanup(bot, callback, callback_data.preview_id)
+    await _cleanup(bot, callback, callback_data.preview_id, callback_data.preview_count)
     await callback.message.answer(MENU_TEXT, reply_markup=main_menu_keyboard(role))
 
 @post_router.callback_query(DraftCB.filter(F.action == DraftAction.REGENERATE))
@@ -150,25 +150,35 @@ async def regenerate_draft(
     generate_source: FromDishka[GenerateSourcePostUseCase],
     preview_post: FromDishka[PreviewPostUseCase]
 ):
-    await callback.answer()
-
     # save post data before deleting.
     post = await post_service.get_by_id(callback_data.post_id)
 
     topic: QuizTopicEntity | None = None
     source: SourceEntity | None = None
 
-    if post.post_type is PostType.QUIZ:
-        topic_id = QuizPayload.model_validate(post.payload).topic_id
-        topic = await quiz_topic_service.find_by_id(topic_id)
-    else:
-        source_id = SourcePayload.model_validate(post.payload).source_id
-        if source_id is not None:
-            source = await source_service.find_by_id(source_id)
+    # Everything that can answer with an alert happens before the first
+    # callback.answer(): a CallbackQuery only accepts one answer.
+    match post.post_type:
+        case PostType.QUIZ:
+            topic_id = QuizPayload.model_validate(post.payload).topic_id
+            topic = await quiz_topic_service.find_by_id(topic_id)
+        case PostType.SOURCES:
+            source_id = SourcePayload.model_validate(post.payload).source_id
+            if source_id is not None:
+                source = await source_service.find_by_id(source_id)
+        case PostType.CUSTOM:
+            # A button left in the chat from before the keyboard started
+            # honoring allow_regenerate.
+            await callback.answer(CANNOT_REGENERATE_TEXT, show_alert=True)
+            return
+        case _:
+            raise UnsupportedPostTypeError(post.post_type)
+
+    await callback.answer()
 
     # delete_draft, not discard: discard would remove the quiz topic we want to reuse
     await post_service.delete_draft(post.id)
-    await _cleanup_preview(bot, callback, callback_data.preview_id)
+    await _cleanup_preview(bot, callback, callback_data.preview_id, callback_data.preview_count)
 
     # generating again, retry keyboard if failed.
     await _generate_and_preview(
@@ -189,7 +199,11 @@ async def show_draft_actions(
     await render(
         callback,
         DRAFT_TEXT,
-        draft_actions_keyboard(callback_data.post_id, callback_data.preview_id)
+        draft_actions_keyboard(
+            callback_data.post_id,
+            callback_data.preview_id,
+            preview_count=callback_data.preview_count
+        )
     )
 
 # ------------------------------ SCHEDULE A DRAFT ------------------------------
@@ -204,7 +218,12 @@ async def schedule_draft(
     await render(
         callback,
         CHOOSE_TIME_TEXT,
-        schedule_preset_keyboard(callback_data.post_id, callback_data.preview_id, settings.user_tz)
+        schedule_preset_keyboard(
+            callback_data.post_id,
+            callback_data.preview_id,
+            settings.user_tz,
+            preview_count=callback_data.preview_count
+        )
     )
 
 @post_router.callback_query(ScheduleCB.filter(F.preset != SchedulePreset.MANUAL))
@@ -221,7 +240,7 @@ async def schedule_at_preset(
     await post_service.schedule(callback_data.post_id, when)
 
     await callback.answer("Scheduled.")
-    await _cleanup(bot, callback, callback_data.preview_id)
+    await _cleanup(bot, callback, callback_data.preview_id, callback_data.preview_count)
     await _confirm(callback.message, when, settings, role)
 
 @post_router.callback_query(ScheduleCB.filter(F.preset == SchedulePreset.MANUAL))
@@ -239,12 +258,15 @@ async def ask_for_time(
     await render(
         callback,
         ENTER_TIME_TEXT,
-        back_to_draft_keyboard(callback_data.post_id, callback_data.preview_id)
+        back_to_draft_keyboard(
+            callback_data.post_id, callback_data.preview_id, callback_data.preview_count
+        )
     )
     await state.set_state(CreatePostState.waiting_for_time)
     await state.update_data(
         post_id=callback_data.post_id,
         preview_id=callback_data.preview_id,
+        preview_count=callback_data.preview_count,
         prompt_id=callback.message.message_id
     )
 
@@ -283,7 +305,9 @@ async def receive_time(
 
     await state.clear()
     await _delete(bot, message.chat.id, data.get("prompt_id"))
-    await _delete(bot, message.chat.id, data.get("preview_id"))
+    await _delete_preview(
+        bot, message.chat.id, data.get("preview_id"), data.get("preview_count", 1)
+    )
     await _confirm(message, when, settings, role)
 
 # ------------------------------ CUSTOM POST ------------------------------
@@ -322,16 +346,78 @@ async def ask_for_custom_post(
         prompt_id=callback.message.message_id
     )
 
-async def _store_custom_post(
-    parts: list[Message],
-    channel_id: int,
-    prompt_id: int,
+@post_router.message(CustomPostState.waiting_for_post, F.media_group_id)
+async def receive_custom_album(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole,
+    album: FromDishka[MediaGroupCollector],
+    create_custom_post: FromDishka[CreateCustomPostUseCase],
+    preview_post: FromDishka[PreviewPostUseCase]
+) -> None:
+    """Registered before the plain handler so album parts never reach it."""
+    parts = await album.collect(message)
+
+    if parts is None:
+        return
+
+    data = await state.get_data()
+    channel_id: int | None = data.get("channel_id")
+
+    if channel_id is None:
+        await state.clear()
+        await message.answer(CUSTOM_STATE_LOST_TEXT, reply_markup=main_menu_keyboard(role))
+        return
+
+    await _store_custom_post(
+        parts=parts,
+        channel_id=channel_id,
+        prompt_id=data.get("prompt_id"),
+        message=message, state=state, bot=bot, role=role,
+        create_custom_post=create_custom_post, preview_post=preview_post,
+    )
+
+@post_router.message(CustomPostState.waiting_for_post)
+async def receive_custom_post(
     message: Message,
     state: FSMContext,
     bot: Bot,
     role: UserRole,
     create_custom_post: FromDishka[CreateCustomPostUseCase],
     preview_post: FromDishka[PreviewPostUseCase]
+) -> None:
+    """Everything that is not an album. Must stay registered after that one.
+
+    aiogram tries handlers in registration order, and this one has no content
+    filter, so first place would let it swallow every album part one by one.
+    """
+    data = await state.get_data()
+    channel_id: int | None = data.get("channel_id")
+
+    if channel_id is None:
+        await state.clear()
+        await message.answer(CUSTOM_STATE_LOST_TEXT, reply_markup=main_menu_keyboard(role))
+        return
+
+    await _store_custom_post(
+        parts=[message],
+        channel_id=channel_id,
+        prompt_id=data.get("prompt_id"),
+        message=message, state=state, bot=bot, role=role,
+        create_custom_post=create_custom_post, preview_post=preview_post,
+    )
+
+async def _store_custom_post(
+    parts: list[Message],
+    channel_id: int,
+    prompt_id: int | None,
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole,
+    create_custom_post: CreateCustomPostUseCase,
+    preview_post: PreviewPostUseCase
 ) -> None:
     """Validate, store, preview. Shared by the single-message and album paths."""
     try:
@@ -462,10 +548,25 @@ async def _drop(message: Message | None) -> None:
     except TelegramAPIError:
         logger.debug("Could not delete message %s", message.message_id)
 
-async def _cleanup_preview(bot: Bot, callback: CallbackQuery, preview_id: int) -> None:
+async def _cleanup_preview(
+    bot: Bot, callback: CallbackQuery, preview_id: int, preview_count: int = 1
+) -> None:
     """Drop only preview, keeping the message buttons live on."""
     if isinstance(callback.message, Message):
-        await _delete(bot, callback.message.chat.id, preview_id)
+        await _delete_preview(bot, callback.message.chat.id, preview_id, preview_count)
+
+async def _delete_preview(
+    bot: Bot, chat_id: int, preview_id: int | None, preview_count: int = 1
+) -> None:
+    """Delete a preview that may span several messages.
+
+    An album goes out through send_media_group in one call, so Telegram hands
+    out consecutive message ids and only the first one comes back to us.
+    """
+    if preview_id is None:
+        return
+    for offset in range(max(preview_count, 1)):
+        await _delete(bot, chat_id, preview_id + offset)
 
 async def _delete(bot: Bot, chat_id: int, message_id: int | None) -> None:
     """Delete by id, for messages we no longer hold an object for."""
@@ -476,10 +577,12 @@ async def _delete(bot: Bot, chat_id: int, message_id: int | None) -> None:
     except TelegramAPIError:
         logger.debug("Could not delete message %s", message_id)
 
-async def _cleanup(bot: Bot, callback: CallbackQuery, preview_id: int) -> None:
+async def _cleanup(
+    bot: Bot, callback: CallbackQuery, preview_id: int, preview_count: int = 1
+) -> None:
     """Remove both the preview and the buttons that acted on it."""
     if isinstance(callback.message, Message):
-        await _delete(bot, callback.message.chat.id, preview_id)
+        await _delete_preview(bot, callback.message.chat.id, preview_id, preview_count)
     await _drop(callback.message) # type: ignore
 
 async def _confirm(

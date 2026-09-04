@@ -1,5 +1,4 @@
 from core.errors import AppError
-from main.domain.enums import PostType
 
 
 class PublisherError(AppError):
@@ -13,11 +12,3 @@ class PublishError(PublisherError):
         self.exc = exc
 
         super().__init__(f"Cannot publish the post (id={post_id!r}). Traceback: {exc!r} Try again later.")
-
-class UnsupportedPostTypeError(PublisherError):
-    user_message = "This type of the post is not supported. Try again later."
-
-    def __init__(self, post_type: PostType | None = None):
-        self.post_type = post_type
-
-        super().__init__(f"Unsupported post type: {post_type!r}.")

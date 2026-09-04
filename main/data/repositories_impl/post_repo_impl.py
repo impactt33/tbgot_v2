@@ -36,9 +36,10 @@ class PostRepoImpl(PostRepo):
         return result.to_entity() if result is not None else None
 
     async def mark_published(self, post_id: int, telegram_message_id: int) -> PostEntity | None:
+        """None, if the post is not in PUBLISHING: it was never claimed."""
         query = (
             update(Post)
-            .where(Post.id == post_id)
+            .where(Post.id == post_id, Post.status == PostStatus.PUBLISHING)
             .values(
                 status=PostStatus.PUBLISHED,
                 telegram_message_id=telegram_message_id,
@@ -51,12 +52,41 @@ class PostRepoImpl(PostRepo):
         return post.to_entity() if post is not None else None
 
     async def mark_failed(self, post_id: int) -> PostEntity | None:
+        """Called after something already went wrong, so the session may be dirty.
+
+        A statement that failed leaves the transaction in the aborted state, and
+        every next one on that session dies on InFailedSQLTransactionError.
+        Without the rollback this UPDATE would be one of them, and the post
+        would stay in PUBLISHING — which no query ever selects.
+        """
+        await self.session.rollback()
+
         query = (
             update(Post)
             .where(Post.id == post_id)
             .values(
                 status=PostStatus.FAILED
             )
+            .returning(Post)
+        )
+        post: Post | None = await self.session.scalar(query)
+        await self.session.commit()
+        return post.to_entity() if post is not None else None
+
+    async def claim_for_publishing(self, post_id: int) -> PostEntity | None:
+        """The manual counterpart of claim_scheduled, for one post.
+
+        The status check and the status change are the same statement, so two
+        taps on "Publish now" cannot both pass it: the second one matches no
+        row and gets None.
+        """
+        query = (
+            update(Post)
+            .where(
+                Post.id == post_id,
+                Post.status.in_((PostStatus.DRAFT, PostStatus.SCHEDULED)),
+            )
+            .values(status=PostStatus.PUBLISHING)
             .returning(Post)
         )
         post: Post | None = await self.session.scalar(query)
