@@ -1,0 +1,195 @@
+# Интерфейс бота: экраны, кнопки, состояния
+
+> **Главные файлы:**
+> [`callbacks/`](../main/presentation/callbacks/) ·
+> [`keyboards/`](../main/presentation/keyboards/) ·
+> [`states/`](../main/presentation/states/) ·
+> [`filters/roles.py`](../main/presentation/filters/roles.py) ·
+> [`utils/callback_view.py`](../main/presentation/utils/callback_view.py)
+> **Хендлеры:** [`post_handlers.py`](../main/presentation/handlers/post_handlers.py) ·
+> [`menu_handlers.py`](../main/presentation/handlers/menu_handlers.py) ·
+> [`command_handlers.py`](../main/presentation/handlers/command_handlers.py) ·
+> [`admin_panel_handlers.py`](../main/presentation/handlers/admin_panel_handlers.py)
+
+## Карта экранов
+
+```
+/start ─ регистрация, роль NONE → отбой
+/menu ─┬─ Create post      → канал → тип → генерация → черновик
+       ├─ Add created post → канал → «пришли пост»    → черновик
+       ├─ Scheduled posts  → список, тап отменяет
+       └─ Bot management (только ADMIN)
+            ├─ Provide rights → контакт → роль
+            ├─ Add channel    → request_chat
+            └─ Remove channel → request_chat
+
+черновик ─┬─ Publish now  → в канал, всё чистится
+          ├─ Schedule     → пресеты ─┬─ пресет → готово
+          │                          └─ ручной ввод → время
+          ├─ Regenerate   → заново (кроме CUSTOM)
+          └─ Discard      → пост и тема/ресурс удалены
+```
+
+Команды: `/start`, `/menu`, `/admin`, `/self_info`, `/quit`.
+
+## CallbackData
+
+| Класс | Префикс | Несёт |
+|---|---|---|
+| `MenuCB` | `menu` | `action` |
+| `ChannelCB` | `npc` | `channel_id` → экран типа |
+| `CustomChannelCB` | `cpc` | `channel_id` → сразу ждём пост |
+| `GenerateCB` | `npg` | `channel_id`, `post_type` |
+| `DraftCB` | `npd2` | `action`, `post_id`, `preview_id`, `preview_count` |
+| `ScheduleCB` | `nps2` | `preset`, `post_id`, `preview_id`, `preview_count` |
+| `ScheduledCB` | `sch` | `action`, `post_id` |
+
+`ChannelCB` и `CustomChannelCB` разделены намеренно: первая ведёт на выбор типа,
+вторая — сразу в ожидание сообщения.
+
+### Лимит 64 БАЙТА, не символа
+
+Кириллица — по два байта на символ, поэтому русские подписи в `callback_data`
+недопустимы. Считать надо на предельных значениях:
+
+```
+npd2:regenerate:2147483647:999999:10   → 36 байт из 64
+```
+
+### Добавил поле — меняй префикс
+
+**Самая коварная грабля интерфейса.** Новое поле в CallbackData ломает разбор
+кнопок, уже лежащих в чате: `unpack` кидает `TypeError`, но `.filter()` его
+**ловит и возвращает `False`**. Падения нет, ошибки в логе нет — кнопка просто
+молчит.
+
+Поэтому при добавлении `preview_count` префиксы стали `npd2` и `nps2`: под новым
+префиксом старые кнопки просто ни с чем не совпадают, вместо того чтобы тихо
+умирать.
+
+### Ответить на CallbackQuery можно один раз
+
+Второй `callback.answer()` не дойдёт. Отсюда правило: **всё, что может ответить
+алертом, идёт до первого `answer()`.**
+
+Так устроен `regenerate_draft`: сначала `match` по типу поста (ветка `CUSTOM`
+отвечает алертом и выходит), и только потом `await callback.answer()`.
+
+Дефект того же рода ещё открыт в `ask_for_time`: `callback.answer()` стоит первым,
+и ветка «меню устарело» не показывается никогда — пункт 12 в [STATE.md](STATE.md).
+
+## `render`
+
+Единственный способ перерисовать экран:
+
+```python
+async def render(callback, text, markup=None):
+    if not isinstance(callback.message, Message):
+        await callback.answer("This menu is too old, send /menu again.", show_alert=True)
+        return
+    try:
+        await callback.message.edit_text(text, reply_markup=markup)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc):
+            raise
+```
+
+Две вещи, которые он закрывает:
+
+1. **`callback.message` это `Message | InaccessibleMessage | None`.** Telegram
+   прячет тело сообщений старше 48 часов, и редактировать становится нечего.
+2. **Перерисовка того же самого — не ошибка,** но Telegram отвечает
+   `TelegramBadRequest: message is not modified`. Глушится по подстроке; всё
+   остальное пробрасывается.
+
+## FSM
+
+Состояний намеренно мало — **всё, что можно, сделано кнопками**:
+
+```python
+class AdminProvideRightsState(StatesGroup):
+    contact = State()
+    role = State()
+
+class AdminChannelActionState(StatesGroup):
+    waiting_for_channel = State()
+
+class CreatePostState(StatesGroup):
+    waiting_for_time = State()
+
+class CustomPostState(StatesGroup):
+    waiting_for_post = State()
+```
+
+Хранилище — **Redis**, TTL сутки (`FSM_TTL` в `run.py`). Кнопки состояния не
+требуют: `post_id` и `preview_id` едут в `callback_data`, поэтому между
+апдейтами ничего помнить не надо.
+
+### Енумы из Redis возвращаются строками
+
+`RedisStorage` сериализует `data` через `json.dumps`, поэтому сравнение через
+`is` ломается. Нужно приведение обратно:
+
+```python
+raw_action = data.get("action")
+action = ChannelAction(raw_action)
+```
+
+### `/quit`
+
+Живёт в `command_router`, который включается **раньше** `post_router`, — иначе
+хендлер состояния перехватил бы команду. Фильтр `StateFilter(*BOT_STATES)`
+означает, что вне состояния `/quit` молчит.
+
+`BOT_STATES` в `states/__init__.py` — единственный список всех групп; добавил
+группу — впиши сюда, иначе `/quit` из неё не выйдет.
+
+**Открытый дефект:** `/menu`, `/admin` и `/start` состояние **не** сбрасывают —
+ни один не принимает `FSMContext`. Следующая случайная реплика станет черновиком
+с кнопкой «Publish now». Окно — сутки. Пункт 4 в [STATE.md](STATE.md).
+
+## Фильтры ролей
+
+```python
+class HasAccessFilter(Filter):
+    async def __call__(self, event, role: UserRole = UserRole.NONE) -> bool:
+        return role is not UserRole.NONE
+
+class IsAdminFilter(Filter):
+    async def __call__(self, event, role: UserRole = UserRole.NONE) -> bool:
+        return role is UserRole.ADMIN
+```
+
+Вешаются на роутер целиком, а не на отдельные хендлеры:
+
+```python
+post_router.message.filter(HasAccessFilter())
+post_router.callback_query.filter(HasAccessFilter())
+```
+
+Роль берётся из `data["role"]`, который кладёт `RoleMiddleware` — см.
+[users-and-channels.md](users-and-channels.md).
+
+## Чистка сообщений
+
+Черновик оставляет в чате два сообщения: превью (одно или несколько) и панель
+кнопок. После действия обычно надо убрать оба:
+
+| Хелпер | Что убирает |
+|---|---|
+| `_delete(bot, chat_id, id)` | одно сообщение по id, глушит ошибку |
+| `_delete_preview(...)` | превью, возможно из нескольких сообщений подряд |
+| `_drop(message)` | сообщение, объект которого ещё на руках |
+| `_cleanup_preview(...)` | только превью, кнопки остаются |
+| `_cleanup(...)` | превью **и** кнопки |
+
+`_cleanup_preview` нужен именно для Regenerate: старое превью уходит, а панель
+остаётся, чтобы экран не мигал.
+
+Все удаления глушат `TelegramAPIError`: сообщение могли удалить руками, и падать
+из-за этого незачем.
+
+## Тексты
+
+Все строки для пользователя — константами в начале модуля хендлеров, **по-английски**
+(конвенция проекта). Промпты к Gemini — по-русски.
