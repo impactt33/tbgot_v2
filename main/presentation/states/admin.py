@@ -6,3 +6,4 @@ class AdminProvideRightsState(StatesGroup):
 
 class AdminChannelActionState(StatesGroup):
     waiting_for_channel = State()
+    waiting_for_storage = State()

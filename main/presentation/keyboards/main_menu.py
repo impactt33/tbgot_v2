@@ -39,6 +39,10 @@ def admin_menu_keyboard() -> InlineKeyboardMarkup:
         callback_data=MenuCB(action=MenuAction.ADD_CHANNEL)
     )
     builder.button(
+        text="Set up channel",
+        callback_data=MenuCB(action=MenuAction.SETUP_CHANNEL)
+    )
+    builder.button(
         text="Remove channel",
         callback_data=MenuCB(action=MenuAction.REMOVE_CHANNEL)
     )

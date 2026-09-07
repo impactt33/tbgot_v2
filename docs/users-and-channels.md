@@ -6,8 +6,10 @@
 > [`services_impl/user_service_impl.py`](../main/domain/services_impl/user_service_impl.py) ·
 > [`services_impl/channel_service_impl.py`](../main/domain/services_impl/channel_service_impl.py) ·
 > [`cache_impl/role_cache_impl.py`](../main/data/cache_impl/role_cache_impl.py) ·
-> [`keyboards/add_channel.py`](../main/presentation/keyboards/add_channel.py)
-> **Рядом:** [`enums/user_role.py`](../main/domain/enums/user_role.py) ·
+> [`keyboards/add_channel.py`](../main/presentation/keyboards/add_channel.py) ·
+> [`keyboards/channel_setup.py`](../main/presentation/keyboards/channel_setup.py)
+> **Рядом:** [`callbacks/channel_setup.py`](../main/presentation/callbacks/channel_setup.py) ·
+> [`enums/user_role.py`](../main/domain/enums/user_role.py) ·
 > [`filters/roles.py`](../main/presentation/filters/roles.py) ·
 > [`use_cases/change_user_role.py`](../main/domain/use_cases/change_user_role.py) ·
 > [`models/user_model.py`](../main/data/models/user_model.py) ·
@@ -123,49 +125,106 @@ except TelegramAPIError:
 **Открытый дефект:** у `AdminProvideRightsState.contact` нет fallback-хендлера —
 на обычный текст вместо контакта бот молчит. Пункт 14 в [STATE.md](STATE.md).
 
-## Добавление и удаление канала
+## Мастер канала
 
-Один хендлер на оба действия, различаются данными состояния:
+Три входа, один и тот же экран настройки в конце:
 
 ```
-Add channel / Remove channel
-   → state = AdminChannelActionState.waiting_for_channel
-   → state.update_data(action=ChannelAction.ADD | REMOVE)
-   → ReplyKeyboard с request_chat
-   → on_chat_shared
+Add channel      → пикер (id=1) → права → канал записан → экран хранилища
+Remove channel   → пикер (id=1) → канал удалён
+Set up channel   → список каналов (• привязано / ○ нет) → экран хранилища
 ```
 
-### `request_chat`
+Добавление и удаление по-прежнему различаются данными состояния
+(`state.update_data(action=ChannelAction.ADD | REMOVE)`), но экран хранилища
+после добавления открывается сразу: **админ, который только что подключил
+канал, — единственный, кто знает, зачем канал нужен.** Отдельный вход
+«Set up channel» существует ради каналов, добавленных раньше: спрашивать
+хранилище только при добавлении означало бы, что у старых каналов его не будет
+никогда.
+
+### Два пикера, а не один
 
 ```python
+POSTING_REQUEST_ID = 1
+STORAGE_REQUEST_ID = 2
+```
+
+`request_chat` возвращает `chat_shared` с тем `request_id`, который был в кнопке.
+Пикеры разведены по id **и** по состоянию (`waiting_for_channel` против
+`waiting_for_storage`), поэтому кнопка, забытая в чате с прошлого шага, не
+подставит канал не в тот шаг.
+
+```python
+# постинговый канал
 KeyboardButtonRequestChat(
-    request_id=1,
-    chat_is_channel=True,
-    bot_is_member=True,
-    request_title=True,
-    request_username=True,
+    request_id=POSTING_REQUEST_ID,
+    chat_is_channel=True, bot_is_member=True,
+    request_title=True, request_username=True,
 )
+
+# хранилище — плюс одна строка
+    chat_has_username=True,
 ```
 
-Телеграм сам показывает **только каналы, где бот уже состоит**, и присылает
-обратно `chat_id`, `title`, `username`. Ни парсить ссылки, ни спрашивать id
-руками не нужно.
+**`chat_has_username=True` — фильтр на стороне Telegram.** Ссылка на пост в
+приватном канале имеет вид `t.me/c/<id>/<msg>` и открывается только у его
+участников, так что приватное хранилище бесполезно. С этим флагом такие каналы
+в пикере просто не показываются, и админ не может выбрать негодный.
 
-`request_id=1` захардкожен и сверяется в хендлере (`if shared.request_id != 1:
-return`) — на случай, если в чате осталась кнопка от другого запроса.
+Серверная проверка `if not shared.username` всё равно осталась: фильтр в
+пикере — это UI, а `chat_shared` может прийти от старой кнопки. Тогда летит
+`StorageChannelNotPublicError`.
 
-### Проверка прав при добавлении
+`bot_administrator_rights` в пикере **не используется**: у него 11 обязательных
+булевых полей ради одного `can_post_messages`, а `get_chat_member` мы зовём в
+любом случае.
+
+### Проверка прав — общий хелпер
 
 ```python
-member = await bot.get_chat_member(shared.chat_id, bot.id)
-if not (isinstance(member, ChatMemberAdministrator) and member.can_post_messages):
-    → «grant this permission and try again»
+async def _bot_can_post(bot: Bot, chat_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id, bot.id)
+    except TelegramBadRequest:
+        raise BotNotMemberOfChannelError() from None
+    return isinstance(member, ChatMemberAdministrator) and bool(member.can_post_messages)
 ```
 
 `bot_is_member=True` гарантирует только членство, но не право писать. Проверка
-делается **до** записи в БД, чтобы не завести канал, в который нельзя постить.
+идёт **до** записи в БД — и для постингового канала, и для хранилища.
 
-`TelegramBadRequest` от `get_chat_member` → `BotNotMemberOfChannelError`.
+### Состояние переживает отказ
+
+Раньше `state.clear()` стоял до проверки прав, и при отказе админ оставался в
+тупике: кнопка пикера ещё в чате, но нажатие уже никуда не ведёт. Теперь
+состояние сбрасывается **только на успешном исходе**:
+
+- отказ по правам, `BotNotMemberOfChannelError`, `ChannelAlreadyAddedError`,
+  `StorageChannelNotPublicError` — состояние живо, админ чинит права и жмёт
+  кнопку снова;
+- канал записан / удалён / хранилище привязано — `state.clear()`.
+
+Это был дефект 13.
+
+### Хранилище
+
+```
+[Bind storage]      → пикер id=2 → проверки → set_storage_channel(id)
+[Rebind storage]    → то же, если хранилище уже привязано
+[Unbind storage]    → set_storage_channel(None)
+[Skip] / [Done]     → выход в меню
+```
+
+**Пропуск — нормальный исход, а не отказ:** новостной канал материалов не
+публикует и хранилища не требует, `storage_channel_id` для того и nullable.
+
+Отдельная проверка — хранилище не может совпадать с постинговым каналом, иначе
+файл упал бы прямо в ленту.
+
+`channel_id` едет в `StorageCB`, а не лежит в FSM: экран достижим и сразу после
+добавления канала, и из списка настройки, и ни один путь не должен зависеть от
+того, уцелело ли состояние между ними.
 
 ### Дубли
 
@@ -176,11 +235,6 @@ SELECT.
 Удаление канала уносит по `CASCADE` его `quiz_topics`, `sources` и `materials`, а
 посты — тоже `CASCADE`, включая опубликованные.
 
-**Открытый дефект:** `on_chat_shared` делает `state.clear()` **до** проверки
-прав, поэтому при отказе админ остаётся без состояния и без кнопки — тупик.
-Пункт 13 в [STATE.md](STATE.md).
-
-## Хранилище
-
-Отдельного шага в мастере пока нет: `ChannelService.set_storage_channel` написан,
-но никем не вызывается. Это этап 2 в [post-type-material.md](post-type-material.md).
+**Открытый дефект:** `storage_channel_id` объявлен **без FK**, поэтому удаление
+канала-хранилища ничем не отслеживается — id остаётся в строке, а обнаружится
+это только при заливке материала. Пункт 34 в [STATE.md](STATE.md).

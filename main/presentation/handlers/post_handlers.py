@@ -4,7 +4,8 @@ from datetime import datetime
 from aiogram import F, Router, Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InaccessibleMessage, Document
+from aiogram.types import CallbackQuery, Message, InaccessibleMessage, Document, MessageOriginChannel, \
+    MessageOriginHiddenUser, MessageOriginUser, MessageOriginChat
 from dishka import FromDishka
 
 from core.config.settings import Settings
@@ -61,23 +62,6 @@ SEND_POST_TEXT = (
 )
 CUSTOM_STATE_LOST_TEXT = "I lost track of which channel that was for. Start again from the menu."
 CANNOT_REGENERATE_TEXT = "This post was written by hand - there is nothing to regenerate."
-
-@post_router.message(F.document)
-async def test_document_handler(message: Message):
-    document: Document | None = message.document
-
-    if document is None:
-        return
-
-    if message.reply_to_message:
-        replied_chat = message.reply_to_message.chat
-
-        chat_id = replied_chat.id
-        chat_type = replied_chat.type
-
-        await message.answer(f"Replied from: {chat_id} chat_id, chat_type = {chat_type}. Replied to chat = {replied_chat.title}")
-
-    await message.answer(str(document.model_dump()))
 
 # ------------------------------ GENERATING ------------------------------
 

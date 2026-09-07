@@ -5,6 +5,12 @@
 
 Пути в коде кликабельны и относительны корню репозитория.
 
+> **KB актуален на:** `f626dc2` · 2026-09-07, **плюс незакоммиченный этап A**
+> (мастер канала с привязкой хранилища) в рабочем дереве.
+> Закоммитишь — подставь новый sha сюда.
+> По этой строке `/kb` понимает, врёт ли документация, а `/kb_update` — какие
+> документы править. **Обновлять при каждой правке базы знаний.**
+
 ---
 
 ## 1. Задача → документ → главные файлы
@@ -20,7 +26,7 @@
 | Посты с материалами | [post-type-material.md](post-type-material.md) | [`material_model.py`](../main/data/models/material_model.py), [`material_entity.py`](../main/domain/entities/material_entity.py), [`material_repo_impl.py`](../main/data/repositories_impl/material_repo_impl.py) |
 | Отложенная публикация, ввод времени | [scheduling.md](scheduling.md) | [`time_input.py`](../main/presentation/utils/time_input.py), [`schedule_presets.py`](../main/presentation/utils/schedule_presets.py), [`callbacks/schedule.py`](../main/presentation/callbacks/schedule.py) |
 | Кнопки, экраны, FSM | [bot-ui.md](bot-ui.md) | [`post_handlers.py`](../main/presentation/handlers/post_handlers.py), [`keyboards/`](../main/presentation/keyboards/), [`callbacks/`](../main/presentation/callbacks/), [`states/`](../main/presentation/states/) |
-| Роли, права, каналы | [users-and-channels.md](users-and-channels.md) | [`middlewares/role.py`](../main/presentation/middlewares/role.py), [`admin_panel_handlers.py`](../main/presentation/handlers/admin_panel_handlers.py), [`user_service_impl.py`](../main/domain/services_impl/user_service_impl.py) |
+| Роли, права, каналы | [users-and-channels.md](users-and-channels.md) | [`middlewares/role.py`](../main/presentation/middlewares/role.py), [`admin_panel_handlers.py`](../main/presentation/handlers/admin_panel_handlers.py), [`user_service_impl.py`](../main/domain/services_impl/user_service_impl.py), [`keyboards/channel_setup.py`](../main/presentation/keyboards/channel_setup.py) |
 | Обработка ошибок | [errors.md](errors.md) | [`core/errors/app_error.py`](../core/errors/app_error.py), [`main/domain/errors/`](../main/domain/errors/), [`error_handlers.py`](../main/presentation/handlers/error_handlers.py) |
 | Gemini, веб-поиск | [ai-and-search.md](ai-and-search.md) | [`gemini_ai_client.py`](../main/data/clients_impl/ai/gemini_ai_client.py), [`ai_guard.py`](../main/domain/use_cases/ai_guard.py) |
 | Настройки, логи, запуск | [runtime.md](runtime.md) | [`core/config/settings.py`](../core/config/settings.py), [`core/config/logger.py`](../core/config/logger.py), [`app/run.py`](../app/run.py) |
@@ -152,7 +158,8 @@
 [`main_menu.py`](../main/presentation/keyboards/main_menu.py) корневое и админское меню ·
 [`post.py`](../main/presentation/keyboards/post.py) каналы, типы, действия черновика, пресеты, `SUPPORTED_POST_TYPES` ·
 [`scheduled.py`](../main/presentation/keyboards/scheduled.py) список отложенных ·
-[`add_channel.py`](../main/presentation/keyboards/add_channel.py) `request_chat` ·
+[`add_channel.py`](../main/presentation/keyboards/add_channel.py) `request_chat`, два пикера и их `request_id` ·
+[`channel_setup.py`](../main/presentation/keyboards/channel_setup.py) список каналов и экран хранилища ·
 [`roles.py`](../main/presentation/keyboards/roles.py) выбор роли
 
 **CallbackData** ([`callbacks/`](../main/presentation/callbacks/)) — таблица префиксов в [bot-ui.md](bot-ui.md#callbackdata)
@@ -161,7 +168,8 @@
 [`post.py`](../main/presentation/callbacks/post.py) `ChannelCB`, `GenerateCB`, `DraftCB` ·
 [`schedule.py`](../main/presentation/callbacks/schedule.py) `ScheduleCB` ·
 [`scheduled.py`](../main/presentation/callbacks/scheduled.py) `ScheduledCB` ·
-[`custom_post.py`](../main/presentation/callbacks/custom_post.py) `CustomChannelCB`
+[`custom_post.py`](../main/presentation/callbacks/custom_post.py) `CustomChannelCB` ·
+[`channel_setup.py`](../main/presentation/callbacks/channel_setup.py) `SetupChannelCB`, `StorageCB`, `StorageAction`
 
 **Утилиты** ([`utils/`](../main/presentation/utils/))
 
@@ -195,6 +203,7 @@
 | промпты к Gemini | константы `_SYSTEM`, `_*_PROMPT` в [`generate_quiz.py`](../main/domain/use_cases/generate_quiz.py), [`generate_source.py`](../main/domain/use_cases/generate_source.py) |
 | лимиты Telegram (1024 / 4096 / 10) | [`post_input.py`](../main/presentation/utils/post_input.py) |
 | список групп состояний | `BOT_STATES` в [`states/__init__.py`](../main/presentation/states/__init__.py) |
+| `request_id` пикеров каналов | `POSTING_REQUEST_ID`, `STORAGE_REQUEST_ID` в [`keyboards/add_channel.py`](../main/presentation/keyboards/add_channel.py) |
 | `naming_convention` | [`core/database/base.py`](../core/database/base.py) |
 | порядок роутеров | [`app/run.py`](../app/run.py) |
 | head миграций | [`bdf76a3344c2`](../migration/versions/bdf76a3344c2_materials_table_and_storage_channel.py) |

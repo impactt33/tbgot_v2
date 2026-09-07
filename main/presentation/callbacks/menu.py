@@ -14,6 +14,7 @@ class MenuAction(str, Enum):
     PROVIDE_RIGHTS = "rights"
     ADD_CHANNEL = "add_channel"
     REMOVE_CHANNEL = "remove_channel"
+    SETUP_CHANNEL = "setup_channel"
 
 
 class MenuCB(CallbackData, prefix="menu"):

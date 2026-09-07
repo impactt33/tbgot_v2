@@ -20,8 +20,13 @@
        ├─ Scheduled posts  → список, тап отменяет
        └─ Bot management (только ADMIN)
             ├─ Provide rights → контакт → роль
-            ├─ Add channel    → request_chat
+            ├─ Add channel    → request_chat → экран хранилища
+            ├─ Set up channel → список каналов → экран хранилища
             └─ Remove channel → request_chat
+
+экран хранилища ─┬─ Bind / Rebind storage → request_chat (только публичные)
+                 ├─ Unbind storage        → отвязать
+                 └─ Skip / Done           → в меню
 
 черновик ─┬─ Publish now  → в канал, всё чистится
           ├─ Schedule     → пресеты ─┬─ пресет → готово
@@ -43,9 +48,15 @@
 | `DraftCB` | `npd2` | `action`, `post_id`, `preview_id`, `preview_count` |
 | `ScheduleCB` | `nps2` | `preset`, `post_id`, `preview_id`, `preview_count` |
 | `ScheduledCB` | `sch` | `action`, `post_id` |
+| `SetupChannelCB` | `stc` | `channel_id` → экран настройки канала |
+| `StorageCB` | `stg` | `action`, `channel_id` |
 
 `ChannelCB` и `CustomChannelCB` разделены намеренно: первая ведёт на выбор типа,
 вторая — сразу в ожидание сообщения.
+
+`SetupChannelCB` и `StorageCB` разведены по префиксам не для красоты: у них
+разное число полей, и общий префикс означал бы, что `.filter()` одного класса
+ловит кнопки другого и падает на распаковке.
 
 ### Лимит 64 БАЙТА, не символа
 
@@ -113,6 +124,7 @@ class AdminProvideRightsState(StatesGroup):
 
 class AdminChannelActionState(StatesGroup):
     waiting_for_channel = State()
+    waiting_for_storage = State()
 
 class CreatePostState(StatesGroup):
     waiting_for_time = State()
