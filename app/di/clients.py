@@ -6,9 +6,10 @@ from dishka import Provider, Scope, provide, from_context
 
 from core.config.settings import Settings
 from main.data.clients_impl.ai.gemini_ai_client import GeminiAIClient
+from main.data.clients_impl.telegram.telegram_media_downloader import TelegramMediaDownloader
 from main.data.clients_impl.telegram.telegram_publisher import TelegramPublisher
 from main.data.clients_impl.web_search.serper_web_search_client import SerperWebSearchClient
-from main.domain.clients import AIClient, WebSearchClient, Publisher
+from main.domain.clients import AIClient, WebSearchClient, Publisher, MediaDownloader
 from main.presentation.utils.media_group import MediaGroupCollector
 
 
@@ -20,6 +21,10 @@ class ClientProvider(Provider):
     @provide
     def publisher(self, bot: Bot) -> Publisher:
         return TelegramPublisher(bot)
+
+    @provide
+    def media_downloader(self, bot: Bot) -> MediaDownloader:
+        return TelegramMediaDownloader(bot)
 
     @provide
     async def http_client(self) -> AsyncIterable[httpx.AsyncClient]:

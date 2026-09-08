@@ -35,7 +35,7 @@ class GeminiAIClient(AIClient):
         )
 
     @staticmethod
-    def process_to_history( # TODO: в будушем посмотреть как парситься история, чтобы не было двух последних user
+    def process_to_history(
         prompt: str,
         *,
         history: list[str] | None = None,
@@ -131,7 +131,9 @@ class GeminiAIClient(AIClient):
         prompt: str,
         schema: type[TModel],
         *,
-        system: str | None = None
+        system: str | None = None,
+        images: list[bytes] | None = None,
+        mime_type: str = "image/jpeg",
     ) -> TModel | AIFailure:
         generate_config = types.GenerateContentConfig(
             system_instruction=system,
@@ -141,7 +143,9 @@ class GeminiAIClient(AIClient):
             thinking_config=types.ThinkingConfig(thinking_budget=0)
         )
 
-        response = await self._call(prompt, config=generate_config)
+        response = await self._call(
+            prompt, images=images, mime_type=mime_type, config=generate_config
+        )
 
         if isinstance(response, AIFailure):
             return response
@@ -152,28 +156,3 @@ class GeminiAIClient(AIClient):
             return AIFailure.UNPARSEABLE
 
         return parsed
-
-    async def ask_image(
-        self,
-        prompt: str,
-        images: list[bytes],
-        *,
-        system: str | None = None,
-        mime_type: str = "image/jpeg"
-    ) -> str | AIFailure:
-        generate_config = types.GenerateContentConfig(
-            system_instruction=system,
-            response_mime_type="text/plain",
-            max_output_tokens=4096,
-            thinking_config=types.ThinkingConfig(thinking_budget=0)
-        )
-        response = await self._call(prompt, images=images, mime_type=mime_type, config=generate_config)
-
-        if isinstance(response, AIFailure):
-            return response
-
-        if not response.text:
-            logger.error("Gemini request failed")
-            return AIFailure.EMPTY
-
-        return response.text # type: ignore

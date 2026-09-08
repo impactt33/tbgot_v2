@@ -13,9 +13,21 @@ class AIClient(ABC):
         ...
 
     @abstractmethod
-    async def ask_structured(self, prompt: str, schema: type[TModel], *, system: str | None = None) -> TModel | AIFailure:
-        ...
+    async def ask_structured(
+        self,
+        prompt: str,
+        schema: type[TModel],
+        *,
+        system: str | None = None,
+        images: list[bytes] | None = None,
+        mime_type: str = "image/jpeg",
+    ) -> TModel | AIFailure:
+        """Ask for an answer shaped like `schema`, optionally showing images.
 
-    @abstractmethod
-    async def ask_image(self, prompt: str, images: list[bytes], *, mime_type: str = "image/jpeg") -> str | AIFailure:
-        ...
+        Images are keyword-only on purpose: they are the rare case, and a bare
+        list appearing third in a call would read like part of the prompt.
+
+        `mime_type` applies to the whole list rather than to each image.
+        Telegram photos are always JPEG, so there is nothing to mix; the day
+        there is, this becomes a list.
+        """

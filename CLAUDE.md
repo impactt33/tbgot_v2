@@ -172,5 +172,3 @@ pydantic v2 + pydantic-settings, google-genai, httpx + tenacity (Serper), redis
 - **dishka вешает `inject_router` на startup диспетчера.** В тестовой обвязке без
   `await dp.emit_startup(bot=bot)` все хендлеры с `FromDishka` падают на
   `TypeError: missing required positional arguments`.
-- **PyCharm любит мусорные автоимпорты.** Профилактика:
-  `grep -rnE "^from (app|pyasn1|aiohttp)\." main/ core/` должен молчать.
