@@ -5,9 +5,7 @@
 
 Пути в коде кликабельны и относительны корню репозитория.
 
-> **KB актуален на:** `f626dc2` · 2026-09-07, **плюс незакоммиченный этап A**
-> (мастер канала с привязкой хранилища) в рабочем дереве.
-> Закоммитишь — подставь новый sha сюда.
+> **KB актуален на:** `17e777b` · 2026-09-08 (шаблоны постов, этап B).
 > По этой строке `/kb` понимает, врёт ли документация, а `/kb_update` — какие
 > документы править. **Обновлять при каждой правке базы знаний.**
 
@@ -23,6 +21,7 @@
 | Квиз | [post-type-quiz.md](post-type-quiz.md) | [`generate_quiz.py`](../main/domain/use_cases/generate_quiz.py), [`quiz_topic_model.py`](../main/data/models/quiz_topic_model.py) |
 | Пост о ресурсе | [post-type-sources.md](post-type-sources.md) | [`generate_source.py`](../main/domain/use_cases/generate_source.py), [`source_model.py`](../main/data/models/source_model.py), [`serper_web_search_client.py`](../main/data/clients_impl/web_search/serper_web_search_client.py) |
 | Ручной пост, альбомы | [post-type-custom.md](post-type-custom.md) | [`post_input.py`](../main/presentation/utils/post_input.py), [`media_group.py`](../main/presentation/utils/media_group.py), [`create_custom_post.py`](../main/domain/use_cases/create_custom_post.py) |
+| Шаблоны постов канала | [post-templates.md](post-templates.md) | [`post_template_model.py`](../main/data/models/post_template_model.py), [`post_template_service.py`](../main/domain/services/post_template_service.py), [`post_template_repo_impl.py`](../main/data/repositories_impl/post_template_repo_impl.py), [`keyboards/templates.py`](../main/presentation/keyboards/templates.py) |
 | Посты с материалами | [post-type-material.md](post-type-material.md) | [`material_model.py`](../main/data/models/material_model.py), [`material_entity.py`](../main/domain/entities/material_entity.py), [`material_repo_impl.py`](../main/data/repositories_impl/material_repo_impl.py) |
 | Отложенная публикация, ввод времени | [scheduling.md](scheduling.md) | [`time_input.py`](../main/presentation/utils/time_input.py), [`schedule_presets.py`](../main/presentation/utils/schedule_presets.py), [`callbacks/schedule.py`](../main/presentation/callbacks/schedule.py) |
 | Кнопки, экраны, FSM | [bot-ui.md](bot-ui.md) | [`post_handlers.py`](../main/presentation/handlers/post_handlers.py), [`keyboards/`](../main/presentation/keyboards/), [`callbacks/`](../main/presentation/callbacks/), [`states/`](../main/presentation/states/) |
@@ -74,6 +73,7 @@
 | [`quiz_topic_entity.py`](../main/domain/entities/quiz_topic_entity.py) | `QuizTopicEntity`, `QuizTopicAddEntity` |
 | [`source_entity.py`](../main/domain/entities/source_entity.py) | `SourceEntity`, `AddSourceEntity` |
 | [`material_entity.py`](../main/domain/entities/material_entity.py) | `MaterialEntity`, `AddMaterialEntity` |
+| [`post_template_entity.py`](../main/domain/entities/post_template_entity.py) | `PostTemplateEntity` |
 
 **Енумы** ([`enums/`](../main/domain/enums/))
 
@@ -106,6 +106,7 @@
 | Тема квиза | [`quiz_topic_repo.py`](../main/domain/repositories/quiz_topic_repo.py) | [`quiz_topic_repo_impl.py`](../main/data/repositories_impl/quiz_topic_repo_impl.py) | [`quiz_topic_service.py`](../main/domain/services/quiz_topic_service.py) | [`quiz_topic_service_impl.py`](../main/domain/services_impl/quiz_topic_service_impl.py) |
 | Ресурс | [`source_repo.py`](../main/domain/repositories/source_repo.py) | [`source_repo_impl.py`](../main/data/repositories_impl/source_repo_impl.py) | [`source_service.py`](../main/domain/services/source_service.py) | [`source_service_impl.py`](../main/domain/services_impl/source_service_impl.py) |
 | Материал | [`material_repo.py`](../main/domain/repositories/material_repo.py) | [`material_repo_impl.py`](../main/data/repositories_impl/material_repo_impl.py) | [`material_service.py`](../main/domain/services/material_service.py) | [`material_service_impl.py`](../main/domain/services_impl/material_service_impl.py) |
+| Шаблон поста | [`post_template_repo.py`](../main/domain/repositories/post_template_repo.py) | [`post_template_repo_impl.py`](../main/data/repositories_impl/post_template_repo_impl.py) | [`post_template_service.py`](../main/domain/services/post_template_service.py) | [`post_template_service_impl.py`](../main/domain/services_impl/post_template_service_impl.py) |
 
 **Клиенты** — ABC в `domain/clients/`, реализация в `data/clients_impl/`:
 
@@ -159,7 +160,8 @@
 [`post.py`](../main/presentation/keyboards/post.py) каналы, типы, действия черновика, пресеты, `SUPPORTED_POST_TYPES` ·
 [`scheduled.py`](../main/presentation/keyboards/scheduled.py) список отложенных ·
 [`add_channel.py`](../main/presentation/keyboards/add_channel.py) `request_chat`, два пикера и их `request_id` ·
-[`channel_setup.py`](../main/presentation/keyboards/channel_setup.py) список каналов и экран хранилища ·
+[`channel_setup.py`](../main/presentation/keyboards/channel_setup.py) список каналов и экран канала ·
+[`templates.py`](../main/presentation/keyboards/templates.py) типы, экран шаблона, список примеров ·
 [`roles.py`](../main/presentation/keyboards/roles.py) выбор роли
 
 **CallbackData** ([`callbacks/`](../main/presentation/callbacks/)) — таблица префиксов в [bot-ui.md](bot-ui.md#callbackdata)
@@ -169,7 +171,8 @@
 [`schedule.py`](../main/presentation/callbacks/schedule.py) `ScheduleCB` ·
 [`scheduled.py`](../main/presentation/callbacks/scheduled.py) `ScheduledCB` ·
 [`custom_post.py`](../main/presentation/callbacks/custom_post.py) `CustomChannelCB` ·
-[`channel_setup.py`](../main/presentation/callbacks/channel_setup.py) `SetupChannelCB`, `StorageCB`, `StorageAction`
+[`channel_setup.py`](../main/presentation/callbacks/channel_setup.py) `SetupChannelCB`, `StorageCB`, `StorageAction` ·
+[`templates.py`](../main/presentation/callbacks/templates.py) `TemplateTypesCB`, `TemplateCB`, `TemplateRemoveExampleCB`, `TemplateAction`
 
 **Утилиты** ([`utils/`](../main/presentation/utils/))
 
@@ -203,10 +206,11 @@
 | промпты к Gemini | константы `_SYSTEM`, `_*_PROMPT` в [`generate_quiz.py`](../main/domain/use_cases/generate_quiz.py), [`generate_source.py`](../main/domain/use_cases/generate_source.py) |
 | лимиты Telegram (1024 / 4096 / 10) | [`post_input.py`](../main/presentation/utils/post_input.py) |
 | список групп состояний | `BOT_STATES` в [`states/__init__.py`](../main/presentation/states/__init__.py) |
+| границы шаблона: 3–5 примеров, 1024 на инструкцию, какие типы шаблонятся | `MIN_EXAMPLES`, `MAX_EXAMPLES`, `MAX_INSTRUCTION_LENGTH`, `TEMPLATE_POST_TYPES` в [`post_template_service.py`](../main/domain/services/post_template_service.py) |
 | `request_id` пикеров каналов | `POSTING_REQUEST_ID`, `STORAGE_REQUEST_ID` в [`keyboards/add_channel.py`](../main/presentation/keyboards/add_channel.py) |
 | `naming_convention` | [`core/database/base.py`](../core/database/base.py) |
 | порядок роутеров | [`app/run.py`](../app/run.py) |
-| head миграций | [`bdf76a3344c2`](../migration/versions/bdf76a3344c2_materials_table_and_storage_channel.py) |
+| head миграций | [`a3f1c9d20e57`](../migration/versions/a3f1c9d20e57_post_templates_table.py) |
 | настройки mypy, pytest | [`pyproject.toml`](../pyproject.toml) |
 
 ---

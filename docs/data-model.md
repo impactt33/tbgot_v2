@@ -8,17 +8,19 @@
 > [`user_model.py`](../main/data/models/user_model.py) ·
 > [`quiz_topic_model.py`](../main/data/models/quiz_topic_model.py) ·
 > [`source_model.py`](../main/data/models/source_model.py) ·
-> [`material_model.py`](../main/data/models/material_model.py)
+> [`material_model.py`](../main/data/models/material_model.py) ·
+> [`post_template_model.py`](../main/data/models/post_template_model.py)
 
-Head миграций — `bdf76a3344c2`.
+Head миграций — `a3f1c9d20e57`.
 
 ## Таблицы
 
 ```
 users                     кто пользуется ботом
-channels ─┬─ quiz_topics  темы квизов, по одной на канал
-          ├─ sources      ресурсы, о которых уже писали
-          └─ materials    файлы, залитые в канал-хранилище
+channels ─┬─ quiz_topics     темы квизов, по одной на канал
+          ├─ sources         ресурсы, о которых уже писали
+          ├─ materials       файлы, залитые в канал-хранилище
+          └─ post_templates  примеры и инструкция на (канал, тип поста)
 posts                     все посты: черновики, отложенные, опубликованные
 ```
 
@@ -91,6 +93,25 @@ pydantic-моделями из `main/domain/entities/payloads.py`: `QuizPayload`
 ### `materials`
 
 Разобрана по полям в [post-type-material.md](post-type-material.md).
+
+### `post_templates`
+
+| Колонка | Тип | Заметка |
+|---|---|---|
+| `id` | int4 PK | |
+| `channel_id` | bigint FK→channels CASCADE | |
+| `post_type` | enum(16) CHECK | `ck_post_templates_posttype` |
+| `examples` | jsonb, `server_default '[]'::jsonb` | 3–5 постов как есть, Telegram HTML |
+| `instruction` | text null | свободный текст владельца канала |
+| `created_at`, `updated_at` | timestamptz | `updated_at` с `onupdate=func.now()` |
+
+`uq_post_templates_channel_id_post_type` — **имя задано руками.** Конвенция
+строит `uq` из первой колонки и дала бы `uq_post_templates_channel_id`, скрыв
+половину ключа. Явное имя конвенцию перебивает: она применяется только к
+безымянным ограничениям. Отдельного индекса по паре нет — UNIQUE создаёт его сам.
+
+Массив вместо отдельной таблицы примеров, три однооператорных запроса и грабли
+`jsonb - integer` — в [post-templates.md](post-templates.md#таблица-post_templates).
 
 ## Конвенции
 

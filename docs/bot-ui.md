@@ -20,13 +20,22 @@
        ├─ Scheduled posts  → список, тап отменяет
        └─ Bot management (только ADMIN)
             ├─ Provide rights → контакт → роль
-            ├─ Add channel    → request_chat → экран хранилища
-            ├─ Set up channel → список каналов → экран хранилища
+            ├─ Add channel    → request_chat → экран канала
+            ├─ Set up channel → список каналов → экран канала
             └─ Remove channel → request_chat
 
-экран хранилища ─┬─ Bind / Rebind storage → request_chat (только публичные)
-                 ├─ Unbind storage        → отвязать
-                 └─ Skip / Done           → в меню
+экран канала ─┬─ Bind / Rebind storage → request_chat (только публичные)
+              ├─ Unbind storage        → отвязать
+              ├─ Post templates        → типы постов
+              └─ Skip / Done           → в меню
+
+типы постов ─ • MATERIAL (3/5) / ○ QUIZ (1/5) / ○ SOURCES (0/5)
+                 ↓
+экран шаблона ─┬─ Add example       → ждём сообщение
+               ├─ Remove example    → список примеров, тап удаляет
+               ├─ Set instruction   → ждём текст
+               ├─ Clear instruction
+               └─ Back
 
 черновик ─┬─ Publish now  → в канал, всё чистится
           ├─ Schedule     → пресеты ─┬─ пресет → готово
@@ -50,6 +59,9 @@
 | `ScheduledCB` | `sch` | `action`, `post_id` |
 | `SetupChannelCB` | `stc` | `channel_id` → экран настройки канала |
 | `StorageCB` | `stg` | `action`, `channel_id` |
+| `TemplateTypesCB` | `tpt` | `channel_id` → список типов |
+| `TemplateCB` | `tpl` | `action`, `channel_id`, `post_type` |
+| `TemplateRemoveExampleCB` | `tprmx` | `channel_id`, `post_type`, `index` |
 
 `ChannelCB` и `CustomChannelCB` разделены намеренно: первая ведёт на выбор типа,
 вторая — сразу в ожидание сообщения.
@@ -57,6 +69,11 @@
 `SetupChannelCB` и `StorageCB` разведены по префиксам не для красоты: у них
 разное число полей, и общий префикс означал бы, что `.filter()` одного класса
 ловит кнопки другого и падает на распаковке.
+
+По той же причине удаление примера вынесено в `TemplateRemoveExampleCB`, а не в
+ещё один `TemplateAction`: индекс не нужен ни одной другой кнопке, а лишнее поле
+в `TemplateCB` обрушило бы распаковку всех уже разосланных кнопок. Худшая
+упаковка из трёх — `tpl:list_ex:-1001962556344:MATERIAL`, 35 байт из 64.
 
 ### Лимит 64 БАЙТА, не символа
 
@@ -129,9 +146,18 @@ class AdminChannelActionState(StatesGroup):
 class CreatePostState(StatesGroup):
     waiting_for_time = State()
 
+class TemplateState(StatesGroup):
+    waiting_for_example = State()
+    waiting_for_instruction = State()
+
 class CustomPostState(StatesGroup):
     waiting_for_post = State()
 ```
+
+`TemplateState` — единственная группа, которой нужна не только «что ждём», но и
+«для чего»: пара (канал, тип поста) кладётся в data, потому что у сообщения нет
+`callback_data`, откуда её взять. Разбирает её `_template_target` в
+[`admin_panel_handlers.py`](../main/presentation/handlers/admin_panel_handlers.py).
 
 Хранилище — **Redis**, TTL сутки (`FSM_TTL` в `run.py`). Кнопки состояния не
 требуют: `post_id` и `preview_id` едут в `callback_data`, поэтому между

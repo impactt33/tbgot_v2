@@ -130,13 +130,13 @@ except TelegramAPIError:
 Три входа, один и тот же экран настройки в конце:
 
 ```
-Add channel      → пикер (id=1) → права → канал записан → экран хранилища
+Add channel      → пикер (id=1) → права → канал записан → экран канала
 Remove channel   → пикер (id=1) → канал удалён
-Set up channel   → список каналов (• привязано / ○ нет) → экран хранилища
+Set up channel   → список каналов (• привязано / ○ нет) → экран канала
 ```
 
 Добавление и удаление по-прежнему различаются данными состояния
-(`state.update_data(action=ChannelAction.ADD | REMOVE)`), но экран хранилища
+(`state.update_data(action=ChannelAction.ADD | REMOVE)`), но экран канала
 после добавления открывается сразу: **админ, который только что подключил
 канал, — единственный, кто знает, зачем канал нужен.** Отдельный вход
 «Set up channel» существует ради каналов, добавленных раньше: спрашивать
@@ -207,12 +207,13 @@ async def _bot_can_post(bot: Bot, chat_id: int) -> bool:
 
 Это был дефект 13.
 
-### Хранилище
+### Экран канала
 
 ```
 [Bind storage]      → пикер id=2 → проверки → set_storage_channel(id)
 [Rebind storage]    → то же, если хранилище уже привязано
 [Unbind storage]    → set_storage_channel(None)
+[Post templates]    → примеры и инструкция, см. post-templates.md
 [Skip] / [Done]     → выход в меню
 ```
 

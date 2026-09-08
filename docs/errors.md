@@ -55,6 +55,8 @@ AppError
 ├─ SourceError        ─ SourceNotFound, NoSourceFound, InvalidSourceDraft
 ├─ MaterialError      ─ MaterialNotFound, MaterialAlreadyUsed,
 │                       StorageChannelNotSet, StorageChannelNotPublic
+├─ PostTemplateError  ─ PostTemplateNotFound, ExampleNotFound,
+│                       TooManyExamples, NotEnoughExamples
 ├─ AIClientError      ─ RequestFailed, AnswerIsEmpty, AIClientUnavailable,
 │                       AIClientRejected, AIClientUnparsableAnswer, AnswerTooBig
 ├─ PublisherError     ─ PublishError

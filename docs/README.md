@@ -21,6 +21,7 @@
 | [post-type-sources.md](post-type-sources.md) | тип `SOURCES` |
 | [post-type-custom.md](post-type-custom.md) | тип `CUSTOM`, альбомы |
 | [post-type-material.md](post-type-material.md) | тип `MATERIAL` — **в работе** |
+| [post-templates.md](post-templates.md) | примеры и инструкция на пару (канал, тип) |
 | [scheduling.md](scheduling.md) | отложенная публикация, ввод времени |
 | [bot-ui.md](bot-ui.md) | экраны, кнопки, CallbackData, FSM |
 | [users-and-channels.md](users-and-channels.md) | роли, права, подключение каналов |
