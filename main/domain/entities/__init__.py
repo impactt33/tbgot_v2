@@ -5,6 +5,7 @@ from .post_entity import PostEntity, PostCreateEntity
 from .payloads import QuizPayload, SourcePayload, CustomPayload, MaterialPayload
 from .source_entity import SourceEntity, AddSourceEntity
 from .material_entity import MaterialEntity, AddMaterialEntity
+from .post_template_entity import PostTemplateEntity
 
 __all__ = [
     "UserEntity",
@@ -23,5 +24,6 @@ __all__ = [
     "CustomPayload",
     "MaterialPayload",
     "MaterialEntity",
-    "AddMaterialEntity"
+    "AddMaterialEntity",
+    "PostTemplateEntity"
 ]

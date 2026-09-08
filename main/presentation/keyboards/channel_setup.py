@@ -8,6 +8,7 @@ from main.presentation.callbacks import (
     SetupChannelCB,
     StorageAction,
     StorageCB,
+    TemplateTypesCB,
 )
 
 
@@ -45,6 +46,11 @@ def storage_prompt_keyboard(channel_id: int, *, has_storage: bool) -> InlineKeyb
             text="Unbind storage",
             callback_data=StorageCB(action=StorageAction.UNBIND, channel_id=channel_id)
         )
+
+    builder.button(
+        text="Post templates",
+        callback_data=TemplateTypesCB(channel_id=channel_id)
+    )
 
     builder.button(
         text="Done" if has_storage else "Skip",

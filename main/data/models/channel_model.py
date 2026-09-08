@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from main.data.models.quiz_topic_model import QuizTopic
     from main.data.models.source_model import Source
     from main.data.models.material_model import Material
+    from main.data.models.post_template_model import PostTemplate
 
 
 class Channel(Base):
@@ -45,6 +46,12 @@ class Channel(Base):
         lazy="raise"
     )
     materials: Mapped[list[Material]] = relationship(
+        back_populates="channel",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="raise"
+    )
+    post_templates: Mapped[list[PostTemplate]] = relationship(
         back_populates="channel",
         cascade="all, delete-orphan",
         passive_deletes=True,

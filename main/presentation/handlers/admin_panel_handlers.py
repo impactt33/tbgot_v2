@@ -3,24 +3,34 @@ import logging
 from aiogram import Router, types, F, Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardRemove, ChatMemberAdministrator, CallbackQuery
+from aiogram.types import ReplyKeyboardRemove, ChatMemberAdministrator, CallbackQuery, \
+    InlineKeyboardMarkup
+from aiogram.utils.text_decorations import html_decoration
 from dishka import FromDishka
 
-from main.domain.entities import ChannelAddEntity, ChannelEntity
-from main.domain.enums import UserRole, ChannelAction
+from main.domain.entities import ChannelAddEntity, ChannelEntity, PostTemplateEntity
+from main.domain.enums import UserRole, ChannelAction, PostType
 from main.domain.errors import ChannelAddingError, ChannelMissingError, BotNotMemberOfChannelError, \
     ChannelRemovingError, StorageChannelNotPublicError
-from main.domain.services import UserService
+from main.domain.services import UserService, PostTemplateService
 from main.domain.services.channel_service import ChannelService
+from main.domain.services.post_template_service import (
+    MAX_EXAMPLES,
+    MAX_INSTRUCTION_LENGTH,
+    MIN_EXAMPLES,
+)
 from main.domain.use_cases import ChangeUserRoleUseCase
-from main.presentation.callbacks import MenuCB, MenuAction, SetupChannelCB, StorageAction, StorageCB
+from main.presentation.callbacks import MenuCB, MenuAction, SetupChannelCB, StorageAction, StorageCB, \
+    TemplateAction, TemplateCB, TemplateRemoveExampleCB, TemplateTypesCB
 from main.presentation.filters import IsAdminFilter
 from main.presentation.keyboards import roles_keyboard, choose_channel_keyboard, admin_menu_keyboard, \
-    main_menu_keyboard, choose_storage_keyboard, setup_channels_keyboard, storage_prompt_keyboard
+    main_menu_keyboard, choose_storage_keyboard, setup_channels_keyboard, storage_prompt_keyboard, \
+    back_to_template_keyboard, examples_keyboard, template_keyboard, template_types_keyboard
 from main.presentation.keyboards.add_channel import POSTING_REQUEST_ID, STORAGE_REQUEST_ID
 from main.presentation.keyboards.roles import ROLE_CALLBACK_PREFIX
-from main.presentation.states import AdminProvideRightsState, AdminChannelActionState
-from main.presentation.utils import render
+from main.presentation.states import AdminProvideRightsState, AdminChannelActionState, TemplateState
+from main.presentation.utils import render, tg_length
+from main.presentation.utils.post_input import TEXT_LIMIT
 
 admin_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
@@ -42,6 +52,33 @@ STORAGE_IS_POSTING_CHANNEL_TEXT = (
     "different one - otherwise the file would land in the feed."
 )
 SETUP_STATE_LOST_TEXT = "I lost track of which channel that was for. Start again from the menu."
+TEMPLATE_TYPES_TEXT = (
+    "Post templates for this channel.\n\n"
+    "Each type keeps up to {max_examples} real posts, and generation needs at "
+    "least {min_examples} of them. The bot copies their manner, not their "
+    "content."
+).format(max_examples=MAX_EXAMPLES, min_examples=MIN_EXAMPLES)
+EXAMPLE_PROMPT_TEXT = (
+    "Send a real post of this type - forward it from the channel or type it out.\n\n"
+    "Photos are ignored, only the text is stored, formatting included."
+)
+EXAMPLE_EMPTY_TEXT = "There is no text in that message. Send a post with text or a caption."
+EXAMPLE_TOO_LONG_TEXT = (
+    "That is {length} characters, and a post cannot be longer than {limit}. "
+    "It looks like more than one post."
+)
+EXAMPLES_LIST_TEXT = "Pick the example to remove."
+INSTRUCTION_PROMPT_TEXT = (
+    "Send the instruction for this post type - tone, length, emoji, hashtags, "
+    "anything the examples do not make obvious.\n\n"
+    f"Up to {MAX_INSTRUCTION_LENGTH} characters."
+)
+INSTRUCTION_TOO_LONG_TEXT = (
+    "That is {length} characters, and the instruction is limited to {limit}."
+)
+TEMPLATE_STATE_LOST_TEXT = (
+    "I lost track of which template that was for. Start again from the menu."
+)
 
 
 @admin_router.callback_query(MenuCB.filter(F.action == MenuAction.ADMIN))
@@ -321,6 +358,200 @@ async def on_storage_shared(
     )
     await message.answer(MENU_TEXT, reply_markup=main_menu_keyboard(role))
 
+# ------------------------------ POST TEMPLATES ------------------------------
+
+@admin_router.callback_query(TemplateTypesCB.filter())
+async def show_template_types(
+    callback: CallbackQuery,
+    callback_data: TemplateTypesCB,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    """Which post types of this channel already have a usable template."""
+    templates = await template_service.list_by_channel(callback_data.channel_id)
+    counts = {template.post_type: len(template.examples) for template in templates}
+
+    await callback.answer()
+    await render(
+        callback,
+        TEMPLATE_TYPES_TEXT,
+        template_types_keyboard(callback_data.channel_id, counts)
+    )
+
+@admin_router.callback_query(TemplateCB.filter(F.action == TemplateAction.OPEN))
+async def show_template(
+    callback: CallbackQuery,
+    callback_data: TemplateCB,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    template = await template_service.find(callback_data.channel_id, callback_data.post_type)
+    text, markup = _template_view(callback_data.channel_id, callback_data.post_type, template)
+
+    await callback.answer()
+    await render(callback, text, markup)
+
+@admin_router.callback_query(TemplateCB.filter(F.action == TemplateAction.ADD_EXAMPLE))
+async def ask_for_example(
+    callback: CallbackQuery,
+    callback_data: TemplateCB,
+    state: FSMContext
+) -> None:
+    await state.set_state(TemplateState.waiting_for_example)
+    # PostType is a plain Enum, and FSM data goes through json.dumps, so the
+    # value travels instead of the member. It comes back as a string either way.
+    await state.update_data(
+        channel_id=callback_data.channel_id, post_type=callback_data.post_type.value
+    )
+
+    await callback.answer()
+    await render(
+        callback,
+        EXAMPLE_PROMPT_TEXT,
+        back_to_template_keyboard(callback_data.channel_id, callback_data.post_type)
+    )
+
+@admin_router.message(TemplateState.waiting_for_example)
+async def on_example_received(
+    message: types.Message,
+    state: FSMContext,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    # html_text is empty when the message carries neither text nor a caption.
+    # For an album that is every part but the first, and since the photos are
+    # not stored at all, those extra updates are dropped without a word rather
+    # than answering "that is empty" once per photo.
+    text = message.html_text
+
+    if not text:
+        if message.media_group_id is None:
+            await message.answer(EXAMPLE_EMPTY_TEXT)
+        return
+
+    length = tg_length(text)
+
+    if length > TEXT_LIMIT:
+        await message.answer(EXAMPLE_TOO_LONG_TEXT.format(length=length, limit=TEXT_LIMIT))
+        return
+
+    target = await _template_target(message, state)
+
+    if target is None:
+        return
+
+    channel_id, post_type = target
+    template = await template_service.add_example(channel_id, post_type, text)
+
+    await state.clear()
+    view_text, markup = _template_view(channel_id, post_type, template)
+    await message.answer(view_text, reply_markup=markup)
+
+@admin_router.callback_query(TemplateCB.filter(F.action == TemplateAction.LIST_EXAMPLES))
+async def show_examples_for_remove(
+    callback: CallbackQuery,
+    callback_data: TemplateCB,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    """The removal list. Falls back to the template screen if it is empty.
+
+    The button that leads here is only drawn when there is something to remove,
+    but one left over in the chat could still arrive after the last example is
+    gone - and an empty list of buttons is a dead end.
+    """
+    template = await template_service.find(callback_data.channel_id, callback_data.post_type)
+
+    await callback.answer()
+
+    if template is None or not template.examples:
+        text, markup = _template_view(callback_data.channel_id, callback_data.post_type, template)
+        await render(callback, text, markup)
+        return
+
+    await render(
+        callback,
+        EXAMPLES_LIST_TEXT,
+        examples_keyboard(
+            callback_data.channel_id,
+            callback_data.post_type,
+            [tg_length(example) for example in template.examples]
+        )
+    )
+
+@admin_router.callback_query(TemplateRemoveExampleCB.filter())
+async def remove_example(
+    callback: CallbackQuery,
+    callback_data: TemplateRemoveExampleCB,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    # remove_example raises for a stale button pointing past the end of the
+    # array, and that alert has to reach the user - so it runs before answer().
+    template = await template_service.remove_example(
+        callback_data.channel_id, callback_data.post_type, callback_data.index
+    )
+    text, markup = _template_view(callback_data.channel_id, callback_data.post_type, template)
+
+    await callback.answer()
+    await render(callback, text, markup)
+
+@admin_router.callback_query(TemplateCB.filter(F.action == TemplateAction.SET_INSTRUCTION))
+async def ask_for_instruction(
+    callback: CallbackQuery,
+    callback_data: TemplateCB,
+    state: FSMContext
+) -> None:
+    await state.set_state(TemplateState.waiting_for_instruction)
+    await state.update_data(
+        channel_id=callback_data.channel_id, post_type=callback_data.post_type.value
+    )
+
+    await callback.answer()
+    await render(
+        callback,
+        INSTRUCTION_PROMPT_TEXT,
+        back_to_template_keyboard(callback_data.channel_id, callback_data.post_type)
+    )
+
+@admin_router.message(TemplateState.waiting_for_instruction, F.text)
+async def on_instruction_received(
+    message: types.Message,
+    state: FSMContext,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    # Plain text, not html_text: the instruction is read by the model, not
+    # published, so markup in it would be noise.
+    instruction = message.text or ""
+    length = tg_length(instruction)
+
+    if length > MAX_INSTRUCTION_LENGTH:
+        await message.answer(
+            INSTRUCTION_TOO_LONG_TEXT.format(length=length, limit=MAX_INSTRUCTION_LENGTH)
+        )
+        return
+
+    target = await _template_target(message, state)
+
+    if target is None:
+        return
+
+    channel_id, post_type = target
+    template = await template_service.set_instruction(channel_id, post_type, instruction)
+
+    await state.clear()
+    view_text, markup = _template_view(channel_id, post_type, template)
+    await message.answer(view_text, reply_markup=markup)
+
+@admin_router.callback_query(TemplateCB.filter(F.action == TemplateAction.CLEAR_INSTRUCTION))
+async def clear_instruction(
+    callback: CallbackQuery,
+    callback_data: TemplateCB,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    template = await template_service.set_instruction(
+        callback_data.channel_id, callback_data.post_type, None
+    )
+    text, markup = _template_view(callback_data.channel_id, callback_data.post_type, template)
+
+    await callback.answer("Instruction cleared.")
+    await render(callback, text, markup)
+
 # ------------------------------ HELPERS ------------------------------
 
 async def _bot_can_post(bot: Bot, chat_id: int) -> bool:
@@ -347,4 +578,60 @@ def _storage_status(channel: ChannelEntity) -> str:
     return (
         f"«{channel.title or channel.channel_id}» stores materials in "
         f"{channel.storage_channel_id}."
+    )
+
+async def _template_target(
+    message: types.Message, state: FSMContext
+) -> tuple[int, PostType] | None:
+    """Which template the awaited message belongs to, or None if that is lost.
+
+    The pair lives in FSM data rather than in callback_data because a message
+    carries no callback to read it from. Losing it means the state outlived its
+    screen, and the only honest answer is to send the admin back to the menu.
+    """
+    data = await state.get_data()
+    channel_id: int | None = data.get("channel_id")
+    raw_type: str | None = data.get("post_type")
+
+    if channel_id is None or raw_type is None:
+        await state.clear()
+        await message.answer(TEMPLATE_STATE_LOST_TEXT)
+        return None
+
+    # Redis gives enums back as strings, so `is` comparisons need this cast.
+    return channel_id, PostType(raw_type)
+
+def _template_view(
+    channel_id: int, post_type: PostType, template: PostTemplateEntity | None
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Text and keyboard of the template screen, for both callbacks and messages.
+
+    A message handler has nothing to edit, so it answers with a fresh screen
+    instead of redrawing - both paths build it from here.
+    """
+    examples = template.examples if template is not None else []
+    instruction = template.instruction if template is not None else None
+
+    lines = [
+        f"Template for {post_type.value} posts.",
+        "",
+        f"Examples: {len(examples)}/{MAX_EXAMPLES}"
+        + ("" if len(examples) >= MIN_EXAMPLES else f" - {MIN_EXAMPLES} needed to generate"),
+    ]
+
+    if instruction:
+        # The instruction is free text and the bot sends everything as HTML, so
+        # a stray "<" in it would break the whole screen.
+        lines.append(f"Instruction: {html_decoration.quote(instruction)}")
+    else:
+        lines.append("Instruction: not set")
+
+    return (
+        "\n".join(lines),
+        template_keyboard(
+            channel_id,
+            post_type,
+            example_count=len(examples),
+            has_instruction=bool(instruction)
+        )
     )

@@ -4,3 +4,4 @@ from .post import DraftAction, DraftCB, GenerateCB, ChannelCB
 from .schedule import SchedulePreset, ScheduleCB
 from .custom_post import CustomChannelCB
 from .channel_setup import SetupChannelCB, StorageAction, StorageCB
+from .templates import TemplateAction, TemplateCB, TemplateRemoveExampleCB, TemplateTypesCB

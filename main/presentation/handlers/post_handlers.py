@@ -4,8 +4,7 @@ from datetime import datetime
 from aiogram import F, Router, Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InaccessibleMessage, Document, MessageOriginChannel, \
-    MessageOriginHiddenUser, MessageOriginUser, MessageOriginChat
+from aiogram.types import CallbackQuery, Message, InaccessibleMessage
 from dishka import FromDishka
 
 from core.config.settings import Settings

@@ -4,3 +4,4 @@ from .channel_service import ChannelService
 from .post_service import PostService
 from .source_service import SourceService
 from .material_service import MaterialService
+from .post_template_service import PostTemplateService
