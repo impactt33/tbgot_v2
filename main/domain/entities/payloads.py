@@ -32,12 +32,23 @@ class CustomPayload(BaseModel):
     html_text: str
     photo_file_ids: list[str] = Field(default_factory=list)
 
+def material_url(storage_username: str, storage_message_id: int) -> str:
+    """The link to our copy of a material.
+
+    A function and not only a property because the address is needed before
+    there is a payload to ask: the model is given it to place inside the text
+    itself, and that happens before the text exists.
+    """
+    return f"https://t.me/{storage_username}/{storage_message_id}"
+
+
 class MaterialPayload(BaseModel):
     """A post pointing at a file we keep in our own storage channel.
 
-    The published post is title, description and the link, so everything needed
-    to render it is frozen here at draft time: the link is built once, when the
-    file lands in storage, and publishing resolves nothing.
+    The published post is a bold title and the description, and the link lives
+    inside the description - the model writes it there, styled the way the
+    channel styles links. Everything needed to render the post is frozen here
+    at draft time, and publishing resolves nothing.
 
     `storage_username` is what makes the link openable. A private channel's
     link is t.me/c/<shifted_id>/<message_id> and only opens for members, so a
@@ -46,9 +57,9 @@ class MaterialPayload(BaseModel):
 
     `title` is plain text and gets escaped and bolded at publish time.
     `description` is Telegram HTML the model wrote, already checked against the
-    tag list Telegram accepts - see html_guard. Keeping the two apart means a
-    model that mangles its markup can only spoil the middle of the post, never
-    its structure.
+    tag list Telegram accepts, and checked to link at this material and nothing
+    else - see html_guard. Keeping the title apart means a model that mangles
+    its markup can only spoil the body of the post, never its first line.
     """
 
     title: str
@@ -61,4 +72,4 @@ class MaterialPayload(BaseModel):
 
     @property
     def url(self) -> str:
-        return f"https://t.me/{self.storage_username}/{self.storage_message_id}"
+        return material_url(self.storage_username, self.storage_message_id)

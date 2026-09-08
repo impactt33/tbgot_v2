@@ -213,7 +213,7 @@ class MaterialPayload(BaseModel):
 и свободную инструкцию на пару **(канал, тип поста)**. Сводить примеры в
 описанный «шаблон» решено не пробовать: модель получает их как есть и
 абстрагирует сама, каждый раз. Админка для наполнения готова, к генерации ещё не
-подключено — `get_for_generation` ждёт вызова из `CreateMaterialPostUseCase`.
+подключено — `get_for_generation` ждёт вызова из `GenerateMaterialPostUseCase`.
 Всё устройство — в [post-templates.md](post-templates.md).
 
 Таблица общая для всех типов, но подключать её будем сначала только к
@@ -224,7 +224,7 @@ class MaterialPayload(BaseModel):
 
 3. **Приём материала:** `MaterialPostState` (картинки с описанием → документ),
    дедупликация по `file_unique_id` **до** заливки, заливка в хранилище.
-4. **Тип поста:** `CreateMaterialPostUseCase` (он же зовёт
+4. **Тип поста:** `GenerateMaterialPostUseCase` (он же зовёт
    `PostTemplateService.get_for_generation`), `TelegramPublisher._publish_material`,
    ветки `MATERIAL` в `discard_draft` (удалить пост в хранилище и строку
    `materials`) и `regenerate_draft` (регенерировать нечего, как `CUSTOM`),

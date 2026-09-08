@@ -119,6 +119,20 @@ class _Checker(HTMLParser):
         self.problems.append("declarations are not allowed")
 
 
+class _LinkCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.hrefs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+
+        for name, value in attrs:
+            if name == "href" and value:
+                self.hrefs.append(value)
+
+
 class _Stripper(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -179,3 +193,17 @@ def fallback_plain(text: str) -> str:
     this is trying to rescue.
     """
     return escape(strip_tags(text), quote=False)
+
+
+def extract_links(text: str) -> list[str]:
+    """Every address the markup points at, in the order they appear.
+
+    Exists for one check: that a generated post links at its own material and
+    at nothing else. The examples the model is shown are previous posts of the
+    same channel, each carrying a link to a different file - copying one of
+    those produces a post that looks perfect and points at the wrong thing.
+    """
+    collector = _LinkCollector()
+    collector.feed(text)
+    collector.close()
+    return collector.hrefs

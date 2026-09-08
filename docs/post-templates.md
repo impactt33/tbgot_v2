@@ -17,7 +17,7 @@
 > **Миграция:** [`a3f1c9d20e57`](../migration/versions/a3f1c9d20e57_post_templates_table.py)
 
 **Статус: слой данных и админка сделаны, к генерации не подключено.**
-`get_for_generation` написан и ждёт вызова из `CreateMaterialPostUseCase` —
+`get_for_generation` написан и ждёт вызова из `GenerateMaterialPostUseCase` —
 это [этап 3 в post-type-material.md](post-type-material.md).
 
 ## Зачем и почему именно примеры

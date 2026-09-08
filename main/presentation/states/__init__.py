@@ -2,7 +2,8 @@ from .admin import *
 from .post import *
 
 BOT_STATES = (
-    AdminProvideRightsState, AdminChannelActionState, TemplateState, CreatePostState, CustomPostState
+    AdminProvideRightsState, AdminChannelActionState, TemplateState,
+    CreatePostState, CustomPostState, MaterialPostState
 )
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     "TemplateState",
     "CreatePostState",
     "CustomPostState",
+    "MaterialPostState",
     "BOT_STATES"
 ]

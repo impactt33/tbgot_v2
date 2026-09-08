@@ -16,11 +16,12 @@ from main.presentation.callbacks import (
 )
 from main.presentation.utils import TIMED_PRESETS, resolve_preset, PRESET_TITLES, format_local
 
-SUPPORTED_POST_TYPES: tuple[PostType, ...] = (PostType.QUIZ, PostType.SOURCES)
+SUPPORTED_POST_TYPES: tuple[PostType, ...] = (PostType.QUIZ, PostType.SOURCES, PostType.MATERIAL)
 
 POST_TYPE_TITLES: dict[PostType, str] = {
     PostType.QUIZ: "Quiz",
-    PostType.SOURCES: "Sources"
+    PostType.SOURCES: "Sources",
+    PostType.MATERIAL: "Material"
 }
 
 DRAFT_ACTION_TITLES: tuple[tuple[DraftAction, str], ...] = (

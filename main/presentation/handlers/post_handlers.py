@@ -9,13 +9,17 @@ from dishka import FromDishka
 
 from core.config.settings import Settings
 from core.errors import AppError
-from main.domain.entities import QuizTopicEntity, QuizPayload, SourceEntity, SourcePayload
+from main.domain.entities import QuizTopicEntity, QuizPayload, SourceEntity, SourcePayload, \
+    MaterialPayload
 from main.domain.enums import PostType, UserRole
-from main.domain.errors import PostNotScheduledError, UnsupportedPostTypeError
-from main.domain.services import ChannelService, PostService, QuizTopicService, SourceService
+from main.domain.errors import PostNotScheduledError, UnsupportedPostTypeError, \
+    StorageChannelNotSetError
+from main.domain.services import ChannelService, PostService, PostTemplateService, \
+    QuizTopicService, SourceService
 from main.domain.use_cases import GenerateQuizUseCase, GenerateSourcePostUseCase, PreviewPostUseCase, \
-    PublishPostUseCase, DiscardDraftUseCase
+    PublishPostUseCase, DiscardDraftUseCase, GenerateMaterialPostUseCase, RegenerateMaterialTextUseCase
 from main.domain.use_cases.create_custom_post import CreateCustomPostUseCase, CreateCustomPostRequest
+from main.domain.use_cases.generate_material import CreateMaterialPostRequest
 from main.domain.use_cases.generate_quiz import GenerateQuizRequest
 from main.domain.use_cases.generate_source import GenerateSourcePostRequest
 from main.presentation.callbacks import MenuAction, MenuCB, ScheduledAction, ScheduledCB, ChannelCB, GenerateCB, \
@@ -25,9 +29,10 @@ from main.presentation.filters import HasAccessFilter
 from main.presentation.keyboards import back_to_menu_keyboard, scheduled_posts_keyboard, channels_keyboard, \
     post_types_keyboard, retry_keyboard, draft_actions_keyboard, main_menu_keyboard, schedule_preset_keyboard, \
     back_to_draft_keyboard, custom_channels_keyboard
-from main.presentation.states import CreatePostState, CustomPostState
+from main.presentation.states import CreatePostState, CustomPostState, MaterialPostState
 from main.presentation.utils import render, resolve_preset, format_local, parse_when, MediaGroupCollector
-from main.presentation.utils.post_input import build_custom_payload
+from main.presentation.utils.post_input import build_custom_payload, build_material_input, \
+    read_forward_origin
 
 post_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
@@ -61,6 +66,21 @@ SEND_POST_TEXT = (
 )
 CUSTOM_STATE_LOST_TEXT = "I lost track of which channel that was for. Start again from the menu."
 CANNOT_REGENERATE_TEXT = "This post was written by hand - there is nothing to regenerate."
+MENU_TOO_OLD_TEXT = "This menu is too old, send /menu again."
+SEND_MATERIAL_TEXT = (
+    "Send the post with the material's pictures - forward it, or send the photos "
+    "with a caption.\n"
+    "The caption is what the description gets built from, so the more it says "
+    "about the material, the better the post.\n\n"
+    "/quit to cancel."
+)
+SEND_DOCUMENT_TEXT = (
+    "Now the file itself, as a document - forward it or attach it.\n"
+    "It goes into the storage channel, and the post will link to that copy.\n\n"
+    "/quit to cancel."
+)
+NOT_A_DOCUMENT_TEXT = "That is not a file. Send the material as a document."
+MATERIAL_STATE_LOST_TEXT = "I lost track of that material. Start again from the menu."
 
 # ------------------------------ GENERATING ------------------------------
 
@@ -81,7 +101,7 @@ async def choose_post_type(callback: CallbackQuery, callback_data: ChannelCB):
     await callback.answer()
     await render(callback, CHOOSE_TYPE_TEXT, post_types_keyboard(callback_data.channel_id))
 
-@post_router.callback_query(GenerateCB.filter())
+@post_router.callback_query(GenerateCB.filter(F.post_type != PostType.MATERIAL))
 async def generate_post(
     callback: CallbackQuery,
     callback_data: GenerateCB,
@@ -100,6 +120,176 @@ async def generate_post(
         preview_post
     )
 
+
+# ------------------------------ MATERIAL POST ------------------------------
+
+@post_router.callback_query(GenerateCB.filter(F.post_type == PostType.MATERIAL))
+async def ask_for_material_post(
+    callback: CallbackQuery,
+    callback_data: GenerateCB,
+    state: FSMContext,
+    channel_service: FromDishka[ChannelService],
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    """A material post is assembled from what the admin sends, not generated.
+
+    Everything that can refuse runs here, before the first answer(): learning
+    that no storage is bound, or that the template is short of examples, is
+    worth nothing after the pictures and the file have already been forwarded.
+    Both errors reach the user as an alert through error_router.
+    """
+    channel = await channel_service.get_channel_by_id(callback_data.channel_id)
+
+    if channel.storage_channel_id is None:
+        raise StorageChannelNotSetError(channel.channel_id)
+
+    # Raises NotEnoughExamplesError. Only the check happens here; the use case
+    # fetches the template again when it comes to generating.
+    await template_service.get_for_generation(callback_data.channel_id, PostType.MATERIAL)
+
+    if not isinstance(callback.message, Message):
+        await callback.answer(MENU_TOO_OLD_TEXT, show_alert=True)
+        return
+
+    await callback.answer()
+    await render(callback, SEND_MATERIAL_TEXT, back_to_menu_keyboard())
+    await state.set_state(MaterialPostState.waiting_for_post)
+    await state.update_data(
+        channel_id=callback_data.channel_id,
+        prompt_id=callback.message.message_id
+    )
+
+@post_router.message(MaterialPostState.waiting_for_post, F.media_group_id)
+async def receive_material_album(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole,
+    album: FromDishka[MediaGroupCollector]
+) -> None:
+    """Registered before the plain handler so album parts never reach it."""
+    parts = await album.collect(message)
+
+    if parts is None:
+        return
+
+    await _store_material_input(parts, message, state, bot, role)
+
+@post_router.message(MaterialPostState.waiting_for_post)
+async def receive_material_post(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole
+) -> None:
+    """Everything that is not an album. Must stay registered after that one."""
+    await _store_material_input([message], message, state, bot, role)
+
+@post_router.message(MaterialPostState.waiting_for_document, F.document)
+async def receive_material_document(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole,
+    generate_material: FromDishka[GenerateMaterialPostUseCase],
+    preview_post: FromDishka[PreviewPostUseCase]
+) -> None:
+    data = await state.get_data()
+    channel_id: int | None = data.get("channel_id")
+    photo_file_ids: list[str] = data.get("photo_file_ids", [])
+
+    if channel_id is None or not photo_file_ids:
+        await state.clear()
+        await message.answer(MATERIAL_STATE_LOST_TEXT, reply_markup=main_menu_keyboard(role))
+        return
+
+    document = message.document
+
+    if document is None:
+        # F.document already guarantees this; mypy does not know that.
+        return
+
+    source = read_forward_origin(message)
+    waiting = await message.answer(GENERATING_TEXT)
+
+    try:
+        post = await generate_material(
+            CreateMaterialPostRequest(
+                channel_id=channel_id,
+                photo_file_ids=photo_file_ids,
+                description=data.get("description", ""),
+                document_file_id=document.file_id,
+                document_file_unique_id=document.file_unique_id,
+                source_chat_id=source.chat_id,
+                source_username=source.username,
+                source_message_id=source.message_id,
+            )
+        )
+        preview_id = await preview_post(post.id, message.chat.id)
+
+    except AppError as err:
+        # The state stays open on purpose. If the upload went through and the
+        # generation did not, the material row is sitting there unused and the
+        # very same file will be reused on the next attempt - so re-sending it
+        # is the right thing for the admin to do.
+        logger.warning("Material post failed for channel %s: %s", channel_id, err.detail)
+        await _drop(waiting)
+        await message.answer(err.user_message)
+        return
+
+    await state.clear()
+    await _drop(waiting)
+    await _delete(bot, message.chat.id, data.get("prompt_id"))
+    await message.answer(
+        DRAFT_TEXT,
+        reply_markup=draft_actions_keyboard(
+            post.id, preview_id, preview_count=max(len(photo_file_ids), 1)
+        )
+    )
+
+@post_router.message(MaterialPostState.waiting_for_document)
+async def receive_material_not_document(message: Message) -> None:
+    """Anything that is not a file, registered after the handler that is.
+
+    Without this the bot goes quiet on a photo or a sticker and the admin has
+    no way to tell the state is still waiting for something. Defects 14 and 35
+    in STATE.md are that same silence.
+    """
+    await message.answer(NOT_A_DOCUMENT_TEXT)
+
+async def _store_material_input(
+    parts: list[Message],
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    role: UserRole
+) -> None:
+    """Keep the pictures and the caption, then ask for the file."""
+    try:
+        material = build_material_input(parts)
+    except PostInputError as err:
+        # Same reasoning as a bad custom post: the admin just sends another
+        # message, so the state stays where it is.
+        logger.debug("Unusable material post in chat %s: %s", message.chat.id, err.detail)
+        await message.answer(err.user_message)
+        return
+
+    data = await state.get_data()
+
+    if data.get("channel_id") is None:
+        await state.clear()
+        await message.answer(MATERIAL_STATE_LOST_TEXT, reply_markup=main_menu_keyboard(role))
+        return
+
+    await _delete(bot, message.chat.id, data.get("prompt_id"))
+    prompt = await message.answer(SEND_DOCUMENT_TEXT)
+
+    await state.set_state(MaterialPostState.waiting_for_document)
+    await state.update_data(
+        photo_file_ids=material.photo_file_ids,
+        description=material.description,
+        prompt_id=prompt.message_id
+    )
 
 # ------------------------------ DRAFT ------------------------------
 
@@ -148,6 +338,7 @@ async def regenerate_draft(
     source_service: FromDishka[SourceService],
     generate_quiz: FromDishka[GenerateQuizUseCase],
     generate_source: FromDishka[GenerateSourcePostUseCase],
+    regenerate_material: FromDishka[RegenerateMaterialTextUseCase],
     preview_post: FromDishka[PreviewPostUseCase]
 ):
     # save post data before deleting.
@@ -166,6 +357,15 @@ async def regenerate_draft(
             source_id = SourcePayload.model_validate(post.payload).source_id
             if source_id is not None:
                 source = await source_service.find_by_id(source_id)
+        case PostType.MATERIAL:
+            # Nothing to collect and nothing to delete. The material is bound to
+            # this post and would have to be re-bound if the row were recreated,
+            # so this path rewrites the payload in place instead.
+            await callback.answer()
+            await _regenerate_material(
+                callback, callback_data, bot, regenerate_material, preview_post
+            )
+            return
         case PostType.CUSTOM:
             # A button left in the chat from before the keyboard started
             # honoring allow_regenerate.
@@ -517,6 +717,59 @@ async def _generate_and_preview(
     await _drop(callback.message) # type: ignore
     await callback.message.answer(
         DRAFT_TEXT, reply_markup=draft_actions_keyboard(post.id, preview_id)
+    )
+
+async def _regenerate_material(
+    callback: CallbackQuery,
+    callback_data: DraftCB,
+    bot: Bot,
+    regenerate_material: RegenerateMaterialTextUseCase,
+    preview_post: PreviewPostUseCase
+) -> None:
+    """Rewrite the text of a material draft, keeping the post row alive.
+
+    The new preview goes out before the old one is deleted. The other way round
+    would leave the chat with no preview at all if the second call failed, and
+    the buttons pointing at a message that is gone.
+    """
+    if not isinstance(callback.message, Message):
+        return
+
+    chat_id = callback.message.chat.id
+
+    # Redraw without buttons first: regenerating twice would rewrite the same
+    # draft twice and cost two more generations.
+    await render(callback, GENERATING_TEXT)
+
+    try:
+        post = await regenerate_material(callback_data.post_id)
+        preview_id = await preview_post(post.id, chat_id)
+
+    except AppError as err:
+        logger.warning("Rewriting post %s failed: %s", callback_data.post_id, err.detail)
+        await render(
+            callback,
+            err.user_message,
+            draft_actions_keyboard(
+                callback_data.post_id,
+                callback_data.preview_id,
+                preview_count=callback_data.preview_count
+            )
+        )
+        return
+
+    await _delete_preview(bot, chat_id, callback_data.preview_id, callback_data.preview_count)
+
+    payload = MaterialPayload.model_validate(post.payload)
+
+    # The buttons message is replaced rather than edited: the new preview sits
+    # below it, and "Draft is above" has to stay true.
+    await _drop(callback.message)
+    await callback.message.answer(
+        DRAFT_TEXT,
+        reply_markup=draft_actions_keyboard(
+            post.id, preview_id, preview_count=max(len(payload.photo_file_ids), 1)
+        )
     )
 
 async def _render_scheduled(

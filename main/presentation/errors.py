@@ -49,6 +49,15 @@ class PostInputTooLongError(PostInputError):
         )
         super().__init__(f"Custom post too long: {length} > {limit} (with_photo={with_photo}).")
 
+class PostInputNoPhotoError(PostInputError):
+    user_message = (
+        "A material post needs at least one picture. Send the post together "
+        "with its pictures."
+    )
+
+    def __init__(self) -> None:
+        super().__init__("Material post arrived with no photos.")
+
 class PostInputTooManyPhotosError(PostInputError):
     def __init__(self, length: int, limit: int):
         self.length = length

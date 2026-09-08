@@ -20,6 +20,7 @@ from main.domain.entities import (
     PostCreateEntity,
     PostEntity,
     PostTemplateEntity,
+    material_url,
 )
 from main.domain.enums import PostType
 from main.domain.errors import (
@@ -38,6 +39,7 @@ from main.domain.use_cases.ai_guard import unwrap_ai
 from main.domain.use_cases.html_guard import (
     ALLOWED_TAGS_HINT,
     check_telegram_html,
+    extract_links,
     fallback_plain,
     strip_tags,
     visible_length,
@@ -76,7 +78,9 @@ _POST_PROMPT = """Напиши пост о материале для этого 
   Разрешены только теги {allowed_tags}.
   Символы < > & вне тегов пиши как &lt; &gt; &amp;.
   Не длиннее {description_limit} символов видимого текста;
-- ссылку на материал не вставляй — она будет добавлена отдельной строкой."""
+- ссылку на материал вставь в текст сам и оформи так же, как это сделано в
+  примерах. Адрес ровно один: {url}. Придумывать другие адреса или брать их из
+  примеров нельзя — там ссылки на другие материалы."""
 
 _WITH_DESCRIPTION = """Автор материала описал его так. Факты бери отсюда, но перепиши под формат канала:
 
@@ -106,7 +110,7 @@ _REPAIR_PROMPT = """Разметка в поле description неверна:
 
 Верни тот же пост — тот же заголовок и тот же смысл — с исправленной разметкой.
 Разрешены только теги {allowed_tags}. Символы < > & вне тегов пиши как
-&lt; &gt; &amp;."""
+&lt; &gt; &amp;. Ссылка на материал должна остаться в тексте, адрес — {url}."""
 
 
 class MaterialDraft(BaseModel):
@@ -138,6 +142,7 @@ class CreateMaterialPostRequest(BaseModel):
 def _build_prompt(
     template: PostTemplateEntity,
     description: str,
+    url: str,
     previous: MaterialDraft | None,
 ) -> str:
     """Examples first, then the owner's instruction, then this material.
@@ -167,7 +172,40 @@ def _build_prompt(
         title_limit=_TITLE_LIMIT,
         description_limit=_DESCRIPTION_LIMIT,
         allowed_tags=ALLOWED_TAGS_HINT,
+        url=url,
     )
+
+
+def _has_link(description: str, url: str) -> bool:
+    """Whether the material is linked at all, however the model wrote it.
+
+    An anchor is what the prompt asks for, but a bare address pasted into the
+    text is auto-linked by Telegram and works just as well - and it is what the
+    fallback path leaves behind.
+    """
+    return url in extract_links(description) or url in strip_tags(description)
+
+
+def _draft_problems(description: str, url: str) -> list[str]:
+    """Everything wrong with the generated text, markup and link alike.
+
+    The link is part of the writing now, not a line appended after it, so its
+    absence is a defect of the same kind as an unclosed tag and goes through
+    the same repair round.
+    """
+    problems = check_telegram_html(description)
+
+    if not _has_link(description, url):
+        problems.append(f"the link to the material is missing, it has to be {url}")
+
+    problems.extend(
+        f"the post links to {href}, which is a different material - the only "
+        f"address allowed here is {url}"
+        for href in dict.fromkeys(extract_links(description))
+        if href != url
+    )
+
+    return problems
 
 
 async def _generate_text(
@@ -176,6 +214,7 @@ async def _generate_text(
     template: PostTemplateEntity,
     photo_file_ids: list[str],
     description: str,
+    url: str,
     previous: MaterialDraft | None = None,
 ) -> MaterialDraft:
     """Ask for the post, then make sure its markup is markup Telegram takes.
@@ -187,14 +226,14 @@ async def _generate_text(
 
     draft = unwrap_ai(
         await ai_client.ask_structured(
-            _build_prompt(template, description, previous),
+            _build_prompt(template, description, url, previous),
             MaterialDraft,
             system=_SYSTEM,
             images=images,
         )
     )
 
-    problems = check_telegram_html(draft.description)
+    problems = _draft_problems(draft.description, url)
 
     if not problems:
         return draft
@@ -210,40 +249,48 @@ async def _generate_text(
                 title=draft.title,
                 description=draft.description,
                 allowed_tags=ALLOWED_TAGS_HINT,
+                url=url,
             ),
             MaterialDraft,
             system=_SYSTEM,
         )
     )
 
-    if not check_telegram_html(repaired.description):
+    if not _draft_problems(repaired.description, url):
         return repaired
 
     # Formatting is worth less than a post the admin can publish. The words
     # survive, the markup goes, and Regenerate is one tap away.
     logger.warning("Markup still broken after a repair round, dropping it")
 
-    return MaterialDraft(
-        title=repaired.title,
-        description=fallback_plain(repaired.description),
-    )
+    plain = fallback_plain(repaired.description)
+
+    # Stripping the markup takes the anchor with it, and the address lived in
+    # the href. Without it the post describes a file nobody can reach.
+    if url not in plain:
+        plain = f"{plain}\n\n{url}"
+
+    return MaterialDraft(title=repaired.title, description=plain)
 
 
 def _validate(payload: MaterialPayload) -> None:
-    """The finished post has to fit a caption, and the link is part of it."""
+    """The finished post has to link its material and fit inside a caption."""
     if not payload.title.strip():
         raise InvalidMaterialDraftError("Empty title.")
 
     if not strip_tags(payload.description).strip():
         raise InvalidMaterialDraftError("Description has no text in it.")
 
+    if not _has_link(payload.description, payload.url):
+        raise InvalidMaterialDraftError("The material is not linked from the text.")
+
     # Counted the way Telegram counts a caption: visible text only, UTF-16
-    # units, plus the four units of the two blank lines holding the parts apart.
+    # units, plus the two of the blank line between title and body. An href is
+    # not visible text, so an address hidden behind an anchor costs nothing.
     length = (
         visible_length(payload.title)
         + visible_length(payload.description)
-        + visible_length(payload.url)
-        + 4
+        + 2
     )
 
     if length > _CAPTION_LIMIT:
@@ -252,7 +299,7 @@ def _validate(payload: MaterialPayload) -> None:
         )
 
 
-class CreateMaterialPostUseCase:
+class GenerateMaterialPostUseCase:
     def __init__(
         self,
         ai_client: AIClient,
@@ -291,13 +338,18 @@ class CreateMaterialPostUseCase:
 
         material = await self._claim(request, channel.storage_channel_id)
 
+        url = material_url(storage_username, material.storage_message_id)
+
         draft = await _generate_text(
             self.ai_client,
             self.media_downloader,
             template,
             request.photo_file_ids,
             request.description,
+            url,
         )
+
+        logger.info(f"AAA model answered: {draft.description}")
 
         payload = MaterialPayload(
             title=draft.title,
@@ -413,6 +465,7 @@ class RegenerateMaterialTextUseCase:
             template,
             payload.photo_file_ids,
             description="",
+            url=payload.url,
             previous=MaterialDraft(title=payload.title, description=payload.description),
         )
 

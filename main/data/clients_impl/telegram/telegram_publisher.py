@@ -114,18 +114,21 @@ class TelegramPublisher(Publisher):
 
         return messages[0].message_id
     async def _publish_material(self, post: PostEntity, chat_id: int) -> int:
-        """Pictures, the text, and a link to our own copy of the file.
+        """Pictures and the text, with the link already inside the text.
 
-        The link rides inside the text rather than on a button. send_media_group
-        has no reply_markup at all, so a post with two pictures could not carry
-        one, and the layout must not change with the number of pictures.
+        Nothing is appended here. The link is part of the writing - channels
+        style it their own way, and the model puts it where it belongs, having
+        been given the address and the channel's own posts to copy the manner
+        from. A button was never an option either: send_media_group has no
+        reply_markup at all.
 
         The title is escaped before being bolded: it is plain text from the
         model and may hold an ampersand. The description is not escaped - it is
-        Telegram HTML that was checked before the draft was ever stored.
+        Telegram HTML, checked for both its tags and its link before the draft
+        was ever stored.
         """
         payload = MaterialPayload.model_validate(post.payload)
-        text = f"<b>{fmt.quote(payload.title)}</b>\n\n{payload.description}\n\n{payload.url}"
+        text = f"<b>{fmt.quote(payload.title)}</b>\n\n{payload.description}"
         photos = payload.photo_file_ids
 
         if not photos:
