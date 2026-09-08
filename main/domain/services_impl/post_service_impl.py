@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from main.domain.entities import PostEntity, PostCreateEntity
 from main.domain.errors import PostNotFoundError, PostWasNotCreated, PostNotDraftError, PostNotScheduledError, \
@@ -74,6 +75,14 @@ class PostServiceImpl(PostService):
 
     async def delete_draft(self, post_id: int) -> PostEntity:
         post = await self.post_repo.delete_draft(post_id)
+
+        if post is None:
+            raise PostNotDraftError(post_id)
+
+        return post
+
+    async def update_draft_payload(self, post_id: int, payload: dict[str, Any]) -> PostEntity:
+        post = await self.post_repo.update_draft_payload(post_id, payload)
 
         if post is None:
             raise PostNotDraftError(post_id)

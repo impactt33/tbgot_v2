@@ -3,3 +3,4 @@ from .generate_source import GenerateSourcePostUseCase
 from .publish_post import PublishPostUseCase, PreviewPostUseCase
 from .change_user_role import ChangeUserRoleUseCase
 from .discard_draft import DiscardDraftUseCase
+from .generate_material import CreateMaterialPostUseCase, RegenerateMaterialTextUseCase

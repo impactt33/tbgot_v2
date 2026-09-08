@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import update, func, select, delete
 from sqlalchemy.dialects.postgresql import insert
@@ -159,6 +160,22 @@ class PostRepoImpl(PostRepo):
                 Post.id == post_id,
                 Post.status.in_((PostStatus.DRAFT, PostStatus.SCHEDULED)),
             )
+            .returning(Post)
+        )
+        post: Post | None = await self.session.scalar(query)
+        await self.session.commit()
+        return post.to_entity() if post is not None else None
+
+    async def update_draft_payload(
+        self, post_id: int, payload: dict[str, Any]
+    ) -> PostEntity | None:
+        query = (
+            update(Post)
+            .where(
+                Post.id == post_id,
+                Post.status == PostStatus.DRAFT,
+            )
+            .values(payload=payload)
             .returning(Post)
         )
         post: Post | None = await self.session.scalar(query)

@@ -7,7 +7,7 @@ from aiogram.types import InputPollOption, LinkPreviewOptions, MediaUnion, Input
 from aiogram.utils.text_decorations import html_decoration as fmt
 
 from main.domain.clients import Publisher
-from main.domain.entities import SourcePayload, PostEntity, QuizPayload, CustomPayload
+from main.domain.entities import SourcePayload, PostEntity, QuizPayload, CustomPayload, MaterialPayload
 from main.domain.enums import PostType
 from main.domain.errors import PublishError, UnsupportedPostTypeError
 
@@ -27,6 +27,8 @@ class TelegramPublisher(Publisher):
                     return await self._publish_source(post, chat_id)
                 case PostType.CUSTOM:
                     return await self._publish_custom(post, chat_id)
+                case PostType.MATERIAL:
+                    return await self._publish_material(post, chat_id)
                 case _:
                     raise UnsupportedPostTypeError(post.post_type)
         except TelegramAPIError as exc:
@@ -104,6 +106,49 @@ class TelegramPublisher(Publisher):
             InputMediaPhoto(
                 media=file_id,
                 caption=payload.html_text or None if index == 0 else None,
+                parse_mode=ParseMode.HTML if index == 0 else None,
+            )
+            for index, file_id in enumerate(photos)
+        ]
+        messages = await self.bot.send_media_group(chat_id=chat_id, media=media)
+
+        return messages[0].message_id
+    async def _publish_material(self, post: PostEntity, chat_id: int) -> int:
+        """Pictures, the text, and a link to our own copy of the file.
+
+        The link rides inside the text rather than on a button. send_media_group
+        has no reply_markup at all, so a post with two pictures could not carry
+        one, and the layout must not change with the number of pictures.
+
+        The title is escaped before being bolded: it is plain text from the
+        model and may hold an ampersand. The description is not escaped - it is
+        Telegram HTML that was checked before the draft was ever stored.
+        """
+        payload = MaterialPayload.model_validate(post.payload)
+        text = f"<b>{fmt.quote(payload.title)}</b>\n\n{payload.description}\n\n{payload.url}"
+        photos = payload.photo_file_ids
+
+        if not photos:
+            message = await self.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+            )
+            return message.message_id
+
+        if len(photos) == 1:
+            message = await self.bot.send_photo(
+                chat_id=chat_id,
+                photo=photos[0],
+                caption=text,
+                parse_mode=ParseMode.HTML,
+            )
+            return message.message_id
+
+        media: list[MediaUnion] = [
+            InputMediaPhoto(
+                media=file_id,
+                caption=text if index == 0 else None,
                 parse_mode=ParseMode.HTML if index == 0 else None,
             )
             for index, file_id in enumerate(photos)

@@ -1,5 +1,6 @@
 from abc import abstractmethod, ABC
 from datetime import datetime
+from typing import Any
 
 from main.domain.entities import PostEntity, PostCreateEntity
 
@@ -50,3 +51,16 @@ class PostRepo(ABC):
     @abstractmethod
     async def delete_draft(self, post_id: int) -> PostEntity | None:
         """None, if post not in DRAFT/SCHEDULED. Published do not delete."""
+
+    @abstractmethod
+    async def update_draft_payload(
+        self, post_id: int, payload: dict[str, Any]
+    ) -> PostEntity | None:
+        """Replace the payload of a post that is still a draft.
+
+        DRAFT only, unlike delete_draft, which also takes SCHEDULED: rewriting
+        a post the scheduler is already counting on is a different decision
+        from throwing it away, and nothing in the interface asks for it.
+
+        None, if there was nothing to update.
+        """

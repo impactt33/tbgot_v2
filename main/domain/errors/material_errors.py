@@ -37,3 +37,40 @@ class StorageChannelNotPublicError(MaterialError):
     def __init__(self, channel_id: int | None = None) -> None:
         self.channel_id = channel_id
         super().__init__(f"Storage channel (channel_id: {channel_id!r}) has no username.")
+
+class StorageChannelUnreachableError(MaterialError):
+    """The storage channel is bound but no longer answers.
+
+    storage_channel_id carries no foreign key - a storage channel is not a
+    posting target and has no row of its own - so nothing stops it from being
+    deleted, or the bot from being thrown out of it. This is where that turns up.
+    """
+
+    user_message = (
+        "The storage channel does not answer. It may have been deleted, or the "
+        "bot removed from it. Rebind it in Bot management -> Set up channel."
+    )
+
+    def __init__(self, channel_id: int | None = None, exc: Exception | None = None) -> None:
+        self.channel_id = channel_id
+        self.exc = exc
+        super().__init__(
+            f"Storage channel (channel_id: {channel_id!r}) is unreachable. Traceback: {exc!r}"
+        )
+
+class MaterialStorageError(MaterialError):
+    user_message = "Couldn't put the file into the storage channel. Try again later."
+
+    def __init__(self, channel_id: int | None = None, exc: Exception | None = None) -> None:
+        self.channel_id = channel_id
+        self.exc = exc
+        super().__init__(
+            f"Storing a file in channel {channel_id!r} failed. Traceback: {exc!r}"
+        )
+
+class InvalidMaterialDraftError(MaterialError):
+    user_message = "The generated post came out unusable. Try again."
+
+    def __init__(self, reason: str = "") -> None:
+        self.reason = reason
+        super().__init__(f"Material draft rejected: {reason}")

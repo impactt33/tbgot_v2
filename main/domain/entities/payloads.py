@@ -43,6 +43,12 @@ class MaterialPayload(BaseModel):
     link is t.me/c/<shifted_id>/<message_id> and only opens for members, so a
     subscriber tapping it would get nothing — the storage channel has to be
     public, and binding one without a username is refused.
+
+    `title` is plain text and gets escaped and bolded at publish time.
+    `description` is Telegram HTML the model wrote, already checked against the
+    tag list Telegram accepts - see html_guard. Keeping the two apart means a
+    model that mangles its markup can only spoil the middle of the post, never
+    its structure.
     """
 
     title: str
@@ -50,6 +56,8 @@ class MaterialPayload(BaseModel):
     storage_chat_id: int
     storage_message_id: int
     storage_username: str
+    photo_file_ids: list[str] = Field(default_factory=list)
+    material_id: int | None = None
 
     @property
     def url(self) -> str:

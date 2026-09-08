@@ -1,5 +1,6 @@
 from datetime import datetime
 from abc import ABC, abstractmethod
+from typing import Any
 
 from main.domain.entities import PostCreateEntity, PostEntity
 
@@ -48,3 +49,7 @@ class PostService(ABC):
     @abstractmethod
     async def delete_draft(self, post_id: int) -> PostEntity:
         ...
+
+    @abstractmethod
+    async def update_draft_payload(self, post_id: int, payload: dict[str, Any]) -> PostEntity:
+        """Raises PostNotDraftError."""
