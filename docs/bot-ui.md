@@ -15,7 +15,8 @@
 
 ```
 /start ─ регистрация, роль NONE → отбой
-/menu ─┬─ Create post      → канал → тип → генерация → черновик
+/menu ─┬─ Create post      → канал → тип ─┬─ Quiz / Sources → генерация → черновик
+       │                                  └─ Material → картинки → файл → черновик
        ├─ Add created post → канал → «пришли пост»    → черновик
        ├─ Scheduled posts  → список, тап отменяет
        └─ Bot management (только ADMIN)
@@ -36,6 +37,9 @@
                ├─ Set instruction   → ждём текст
                ├─ Clear instruction
                └─ Back
+
+материал ─┬─ шаг 1: пост с картинками (альбом собирается целиком)
+          └─ шаг 2: документ → заливка в хранилище → генерация → превью
 
 черновик ─┬─ Publish now  → в канал, всё чистится
           ├─ Schedule     → пресеты ─┬─ пресет → готово
@@ -152,12 +156,43 @@ class TemplateState(StatesGroup):
 
 class CustomPostState(StatesGroup):
     waiting_for_post = State()
+
+class MaterialPostState(StatesGroup):
+    waiting_for_post = State()
+    waiting_for_document = State()
 ```
 
 `TemplateState` — единственная группа, которой нужна не только «что ждём», но и
 «для чего»: пара (канал, тип поста) кладётся в data, потому что у сообщения нет
 `callback_data`, откуда её взять. Разбирает её `_template_target` в
 [`admin_panel_handlers.py`](../main/presentation/handlers/admin_panel_handlers.py).
+
+`MaterialPostState` копит данные между двумя шагами: `channel_id` кладётся на
+входе, `photo_file_ids` и `description` — после первого сообщения, и всё это
+нужно на втором. Ошибка генерации состояние **не сбрасывает**: если заливка
+прошла, а генерация упала, тот же файл переиспользуется на повторной отправке.
+
+### Порядок регистрации решает
+
+В `post_router` два места, где порядок обязателен, и оба про отсутствующий
+фильтр:
+
+```
+receive_material_album      ← F.media_group_id
+receive_material_post       ← без контент-фильтра: первым съел бы части альбома
+receive_material_document   ← F.document
+receive_material_not_document ← без фильтра: первым съел бы документы
+```
+
+Второй случай — не оптимизация, а лекарство от молчания бота: без
+`receive_material_not_document` присланный вместо файла стикер не совпал бы ни с
+одним хендлером, и админ не узнал бы, что от него всё ещё чего-то ждут. Ровно
+эта дыра числится дефектами 14 и 35 в [STATE.md](STATE.md).
+
+Разведение типов постов сделано **фильтрами, а не порядком**: у `generate_post`
+стоит `F.post_type != PostType.MATERIAL`, у `ask_for_material_post` —
+`F.post_type == PostType.MATERIAL`. Условия взаимоисключающие, так что порядок
+между ними ни на что не влияет.
 
 Хранилище — **Redis**, TTL сутки (`FSM_TTL` в `run.py`). Кнопки состояния не
 требуют: `post_id` и `preview_id` едут в `callback_data`, поэтому между

@@ -5,7 +5,7 @@
 
 Пути в коде кликабельны и относительны корню репозитория.
 
-> **KB актуален на:** `17e777b` · 2026-09-08 (шаблоны постов, этап B).
+> **KB актуален на:** `e519781` · 2026-09-09 (посты с материалами целиком).
 > По этой строке `/kb` понимает, врёт ли документация, а `/kb_update` — какие
 > документы править. **Обновлять при каждой правке базы знаний.**
 
@@ -22,7 +22,9 @@
 | Пост о ресурсе | [post-type-sources.md](post-type-sources.md) | [`generate_source.py`](../main/domain/use_cases/generate_source.py), [`source_model.py`](../main/data/models/source_model.py), [`serper_web_search_client.py`](../main/data/clients_impl/web_search/serper_web_search_client.py) |
 | Ручной пост, альбомы | [post-type-custom.md](post-type-custom.md) | [`post_input.py`](../main/presentation/utils/post_input.py), [`media_group.py`](../main/presentation/utils/media_group.py), [`create_custom_post.py`](../main/domain/use_cases/create_custom_post.py) |
 | Шаблоны постов канала | [post-templates.md](post-templates.md) | [`post_template_model.py`](../main/data/models/post_template_model.py), [`post_template_service.py`](../main/domain/services/post_template_service.py), [`post_template_repo_impl.py`](../main/data/repositories_impl/post_template_repo_impl.py), [`keyboards/templates.py`](../main/presentation/keyboards/templates.py) |
-| Посты с материалами | [post-type-material.md](post-type-material.md) | [`material_model.py`](../main/data/models/material_model.py), [`material_entity.py`](../main/domain/entities/material_entity.py), [`material_repo_impl.py`](../main/data/repositories_impl/material_repo_impl.py) |
+| Посты с материалами | [post-type-material.md](post-type-material.md) | [`generate_material.py`](../main/domain/use_cases/generate_material.py), `_publish_material` в [`telegram_publisher.py`](../main/data/clients_impl/telegram/telegram_publisher.py), [`post_handlers.py`](../main/presentation/handlers/post_handlers.py) |
+| Хранилище файлов, таблица `materials` | [material-storage.md](material-storage.md) | [`material_model.py`](../main/data/models/material_model.py), [`material_storage.py`](../main/domain/clients/telegram/material_storage.py), [`telegram_material_storage.py`](../main/data/clients_impl/telegram/telegram_material_storage.py) |
+| Проверка разметки от модели | [generated-markup.md](generated-markup.md) | [`html_guard.py`](../main/domain/use_cases/html_guard.py) |
 | Отложенная публикация, ввод времени | [scheduling.md](scheduling.md) | [`time_input.py`](../main/presentation/utils/time_input.py), [`schedule_presets.py`](../main/presentation/utils/schedule_presets.py), [`callbacks/schedule.py`](../main/presentation/callbacks/schedule.py) |
 | Кнопки, экраны, FSM | [bot-ui.md](bot-ui.md) | [`post_handlers.py`](../main/presentation/handlers/post_handlers.py), [`keyboards/`](../main/presentation/keyboards/), [`callbacks/`](../main/presentation/callbacks/), [`states/`](../main/presentation/states/) |
 | Роли, права, каналы | [users-and-channels.md](users-and-channels.md) | [`middlewares/role.py`](../main/presentation/middlewares/role.py), [`admin_panel_handlers.py`](../main/presentation/handlers/admin_panel_handlers.py), [`user_service_impl.py`](../main/domain/services_impl/user_service_impl.py), [`keyboards/channel_setup.py`](../main/presentation/keyboards/channel_setup.py) |
@@ -66,7 +68,7 @@
 
 | Файл | Классы |
 |---|---|
-| [`payloads.py`](../main/domain/entities/payloads.py) | `QuizPayload`, `SourcePayload`, `CustomPayload`, `MaterialPayload` |
+| [`payloads.py`](../main/domain/entities/payloads.py) | `QuizPayload`, `SourcePayload`, `CustomPayload`, `MaterialPayload`, `material_url` |
 | [`post_entity.py`](../main/domain/entities/post_entity.py) | `PostEntity`, `PostCreateEntity` |
 | [`channel_entity.py`](../main/domain/entities/channel_entity.py) | `ChannelEntity`, `ChannelAddEntity` |
 | [`user_entity.py`](../main/domain/entities/user_entity.py) | `UserEntity`, `NewUserEntity`, `UserCreateEntity` |
@@ -94,7 +96,8 @@
 | [`create_custom_post.py`](../main/domain/use_cases/create_custom_post.py) | `CreateCustomPostUseCase` | [post-type-custom](post-type-custom.md) |
 | [`change_user_role.py`](../main/domain/use_cases/change_user_role.py) | `ChangeUserRoleUseCase` | [users-and-channels](users-and-channels.md) |
 | [`ai_guard.py`](../main/domain/use_cases/ai_guard.py) | `unwrap_ai` | [ai-and-search](ai-and-search.md) |
-| [`generate_material.py`](../main/domain/use_cases/generate_material.py) | **пустой файл** | [STATE](STATE.md) п. 28 |
+| [`generate_material.py`](../main/domain/use_cases/generate_material.py) | `GenerateMaterialPostUseCase`, `RegenerateMaterialTextUseCase` | [post-type-material](post-type-material.md) |
+| [`html_guard.py`](../main/domain/use_cases/html_guard.py) | `check_telegram_html`, `extract_links`, `visible_length` | [generated-markup](generated-markup.md) |
 
 **Интерфейсы и реализации** — попарно, ABC в `domain`, impl рядом:
 
@@ -113,6 +116,8 @@
 | Интерфейс | Реализация | Документ |
 |---|---|---|
 | [`clients/telegram/publisher.py`](../main/domain/clients/telegram/publisher.py) `Publisher` | [`telegram_publisher.py`](../main/data/clients_impl/telegram/telegram_publisher.py) | [posts](posts.md#публикация-в-telegram) |
+| [`clients/telegram/material_storage.py`](../main/domain/clients/telegram/material_storage.py) `MaterialStorage` | [`telegram_material_storage.py`](../main/data/clients_impl/telegram/telegram_material_storage.py) | [material-storage](material-storage.md#клиент-materialstorage) |
+| [`clients/telegram/media_downloader.py`](../main/domain/clients/telegram/media_downloader.py) `MediaDownloader` | [`telegram_media_downloader.py`](../main/data/clients_impl/telegram/telegram_media_downloader.py) | [ai-and-search](ai-and-search.md#откуда-берутся-байты-картинок) |
 | [`clients/ai/ai_client.py`](../main/domain/clients/ai/ai_client.py) `AIClient` | [`gemini_ai_client.py`](../main/data/clients_impl/ai/gemini_ai_client.py) | [ai-and-search](ai-and-search.md) |
 | [`clients/web_search/web_search_client.py`](../main/domain/clients/web_search/web_search_client.py) `WebSearchClient` | [`serper_web_search_client.py`](../main/data/clients_impl/web_search/serper_web_search_client.py) | [ai-and-search](ai-and-search.md#serper) |
 | [`cache/role_cache.py`](../main/domain/cache/role_cache.py) `RoleCache` | [`role_cache_impl.py`](../main/data/cache_impl/role_cache_impl.py) — **заглушка** | [users-and-channels](users-and-channels.md#кэш-ролей) |
@@ -140,7 +145,7 @@
 | [`user_model.py`](../main/data/models/user_model.py) | `users` | [data-model](data-model.md#users) |
 | [`quiz_topic_model.py`](../main/data/models/quiz_topic_model.py) | `quiz_topics` | [data-model](data-model.md) |
 | [`source_model.py`](../main/data/models/source_model.py) | `sources` | [data-model](data-model.md) |
-| [`material_model.py`](../main/data/models/material_model.py) | `materials` | [post-type-material](post-type-material.md#таблица-materials-по-полям) |
+| [`material_model.py`](../main/data/models/material_model.py) | `materials` | [material-storage](material-storage.md#таблица-materials-по-полям) |
 
 ### `main/presentation/` — презентация
 
@@ -188,7 +193,7 @@
 
 [`middlewares/role.py`](../main/presentation/middlewares/role.py) `RoleMiddleware` ·
 [`filters/roles.py`](../main/presentation/filters/roles.py) `HasAccessFilter`, `IsAdminFilter` ·
-[`states/`](../main/presentation/states/) все `StatesGroup` и `BOT_STATES` ·
+[`states/`](../main/presentation/states/) все `StatesGroup` и `BOT_STATES`, включая `MaterialPostState` ·
 [`errors.py`](../main/presentation/errors.py) ошибки ввода
 
 ---
@@ -205,12 +210,15 @@
 | все тексты для пользователя | константы вверху [`post_handlers.py`](../main/presentation/handlers/post_handlers.py) |
 | промпты к Gemini | константы `_SYSTEM`, `_*_PROMPT` в [`generate_quiz.py`](../main/domain/use_cases/generate_quiz.py), [`generate_source.py`](../main/domain/use_cases/generate_source.py) |
 | лимиты Telegram (1024 / 4096 / 10) | [`post_input.py`](../main/presentation/utils/post_input.py) |
+| какие HTML-теги принимает Telegram | `_ALLOWED_TAGS`, `ALLOWED_TAGS_HINT` в [`html_guard.py`](../main/domain/use_cases/html_guard.py) |
+| сколько картинок уходит модели, лимиты заголовка и описания | `_PROMPT_IMAGES`, `_TITLE_LIMIT`, `_DESCRIPTION_LIMIT`, `_CAPTION_LIMIT` в [`generate_material.py`](../main/domain/use_cases/generate_material.py) |
 | список групп состояний | `BOT_STATES` в [`states/__init__.py`](../main/presentation/states/__init__.py) |
 | границы шаблона: 3–5 примеров, 1024 на инструкцию, какие типы шаблонятся | `MIN_EXAMPLES`, `MAX_EXAMPLES`, `MAX_INSTRUCTION_LENGTH`, `TEMPLATE_POST_TYPES` в [`post_template_service.py`](../main/domain/services/post_template_service.py) |
 | `request_id` пикеров каналов | `POSTING_REQUEST_ID`, `STORAGE_REQUEST_ID` в [`keyboards/add_channel.py`](../main/presentation/keyboards/add_channel.py) |
 | `naming_convention` | [`core/database/base.py`](../core/database/base.py) |
 | порядок роутеров | [`app/run.py`](../app/run.py) |
 | head миграций | [`a3f1c9d20e57`](../migration/versions/a3f1c9d20e57_post_templates_table.py) |
+| как собирается адрес материала | `material_url` в [`entities/payloads.py`](../main/domain/entities/payloads.py) |
 | настройки mypy, pytest | [`pyproject.toml`](../pyproject.toml) |
 
 ---

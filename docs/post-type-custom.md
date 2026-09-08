@@ -1,7 +1,8 @@
 # Тип поста: CUSTOM (ручной пост и альбомы)
 
 > **Главные файлы:**
-> [`utils/post_input.py`](../main/presentation/utils/post_input.py) ·
+> [`utils/post_input.py`](../main/presentation/utils/post_input.py) — `build_custom_payload`,
+> рядом с ним живёт `build_material_input` для [материалов](post-type-material.md) ·
 > [`utils/media_group.py`](../main/presentation/utils/media_group.py) ·
 > [`use_cases/create_custom_post.py`](../main/domain/use_cases/create_custom_post.py) ·
 > `_publish_custom` в [`telegram_publisher.py`](../main/data/clients_impl/telegram/telegram_publisher.py)

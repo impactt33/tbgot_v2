@@ -1,20 +1,21 @@
-# Тип поста: MATERIAL (в работе)
+# Тип поста: MATERIAL
 
-**Статус: сделаны этап 1 (слой данных) и этап 2 целиком — привязка хранилища и
-шаблоны постов. Этапы 3–5 не начаты.** Постов этого типа бот пока не создаёт.
+**Статус: собирается и публикуется, живьём не проверялся.** Тип доступен в меню
+создания поста.
 
 > **Главные файлы:**
-> [`models/material_model.py`](../main/data/models/material_model.py) ·
-> [`entities/material_entity.py`](../main/domain/entities/material_entity.py) ·
-> [`errors/material_errors.py`](../main/domain/errors/material_errors.py) ·
-> [`repositories/material_repo.py`](../main/domain/repositories/material_repo.py) +
-> [impl](../main/data/repositories_impl/material_repo_impl.py) ·
-> [`services/material_service.py`](../main/domain/services/material_service.py) +
-> [impl](../main/domain/services_impl/material_service_impl.py)
+> [`use_cases/generate_material.py`](../main/domain/use_cases/generate_material.py) ·
+> `_publish_material` в [`telegram_publisher.py`](../main/data/clients_impl/telegram/telegram_publisher.py) ·
+> `build_material_input`, `read_forward_origin` в [`post_input.py`](../main/presentation/utils/post_input.py)
+> **Хендлеры:** `ask_for_material_post`, `receive_material_album`,
+> `receive_material_post`, `receive_material_document`, `_regenerate_material` в
+> [`post_handlers.py`](../main/presentation/handlers/post_handlers.py)
 > **Рядом:** `MaterialPayload` в [`entities/payloads.py`](../main/domain/entities/payloads.py) ·
-> `storage_channel_id` в [`channel_model.py`](../main/data/models/channel_model.py) ·
-> `set_storage_channel` в [`channel_service_impl.py`](../main/domain/services_impl/channel_service_impl.py) ·
-> миграция [`bdf76a3344c2`](../migration/versions/bdf76a3344c2_materials_table_and_storage_channel.py)
+> `MaterialPostState` в [`states/post.py`](../main/presentation/states/post.py) ·
+> [`errors/material_errors.py`](../main/domain/errors/material_errors.py)
+> **Опирается на:** [material-storage.md](material-storage.md) — копия файла и
+> учёт материалов · [post-templates.md](post-templates.md) — примеры и инструкция
+> канала · [generated-markup.md](generated-markup.md) — проверка разметки
 
 ## Задача
 
@@ -31,236 +32,202 @@
 перезаливает файл в **канал-хранилище**, принадлежащий владельцу бота, и
 публикует ссылку на неё.
 
-## Почему админ пересылает файл вручную
-
-Всё автоматическое проверено и не работает. Бота в чужой канал добавить нельзя —
-каналы не принадлежат владельцу бота, а добавить бота может только админ канала.
-Дальше:
-
-- `copyMessage` / `forwardMessage` из чужого канала → `Bad Request: message to
-  copy not found` на шести разных `message_id`. Контроль на несуществующем канале
-  даёт **другую** ошибку (`chat not found`), то есть дело в доступе, а не в
-  существовании поста.
-- **Метода вступления в Bot API нет.** Из 181 метода есть `leave_chat`,
-  `join_chat` — нет.
-- Читающих методов тоже нет: ни `getMessage`, ни `getChatHistory`.
-- `getFile` принимает `file_id`, а он приходит только в апдейте из чата, где бот
-  состоит. Свой Bot API-сервер снимает лимиты 20/50 МБ, но ходит с **теми же
-  правами**.
-- Публичная веб-версия `t.me` отдаёт фото и видео прямыми ссылками на
-  `cdn*.telesco.pe`, но **не документы**: у постов с файлами в разметке нет ни
-  одного класса контента, только «Please open Telegram to view this post».
-
-Отсюда принятая схема: **админ пересылает материал боту в личку.** Это не
-автоматизация аккаунта, а человек в своём клиенте.
-
-Из пересланного сообщения бот получает сразу всё:
-
-| Что | Откуда | Зачем |
-|---|---|---|
-| `document.file_id` | сообщение | перезалить в хранилище |
-| `document.file_unique_id` | сообщение | дедупликация |
-| `forward_origin.chat` + `.message_id` | `MessageOriginChannel` | источник заполняется сам |
-
-Перезалив идёт по `file_id`, файл не скачивается — лимиты 20 и 50 МБ не
-задействованы.
-
-## Хранилище обязано быть публичным
-
-Ссылка на пост в приватном канале имеет вид `t.me/c/<shifted_id>/<msg>` и
-открывается **только у участников этого канала**. Подписчик основного канала
-нажмёт кнопку и не получит ничего. Поэтому мастер привязки обязан отклонять
-канал без `username` — `StorageChannelNotPublicError`.
-
-## `channels.storage_channel_id`
-
-`BigInteger`, nullable, **без FK**. Хранилище — не постинговый канал и своей
-строки в `channels` не имеет, ссылаться не на что. Nullable — новостному каналу
-материалы не нужны.
-
-Правится через `ChannelService.set_storage_channel(channel_id, storage_channel_id)`;
-`None` отвязывает.
-
-## Таблица `materials` по полям
-
-```python
-id              Integer PK              # int4, как posts.id и sources.id
-channel_id      BigInteger FK→channels CASCADE
-file_unique_id  String(127)
-
-source_chat_id     BigInteger  null
-source_username    String(63)  null
-source_message_id  BigInteger  null
-
-storage_chat_id     BigInteger
-storage_message_id  BigInteger
-
-created_at    DateTime(tz) server_default=now()
-used_in_post  Integer FK→posts SET NULL
-```
-
-**`id` — `Integer`, а не `BigInteger`,** как `posts.id` и `sources.id`. Держи в
-голове граблю: `posts.id` это int4, а `channels.channel_id` — BigInteger;
-подстановка id канала туда, где ждут id поста, даёт `OverflowError`, обратная
-пройдёт молча.
-
-**`channel_id`** — постинговый канал, для которого материал взят. Не хранилище и
-не источник. `CASCADE`: удалили канал — материалы под него уезжают следом. Из-за
-этого поля дедупликация получается **по каналу**, а не глобальная: один файл
-можно взять в два разных канала (проверено).
-
-**`file_unique_id`** — ключ дедупликации. Не `file_id`, хотя качать и
-перепощивать умеет только он. Из документации Bot API:
-
-> **file_id**: «can be used to download or reuse the file»
-> **file_unique_id**: «is supposed to be the same over time and for different
-> bots. **Can't be used to download or reuse the file**»
-
-Нам нужно сравнивать, а не качать: `file_unique_id` переживает смену токена,
-`file_id` — нет. Сам `file_id` в таблице **не хранится вообще** — он нужен ровно
-один раз, в момент заливки в хранилище. `String(127)` с запасом: реальные
-значения короче, документированного максимума нет.
-
-**`source_*` — три nullable-поля,** провенанс из `forward_origin`. Nullable,
-потому что `forward_origin` это union из четырёх вариантов, и канал несёт только
-один. `MessageOriginHiddenUser` содержит `['type', 'date', 'sender_user_name']` —
-ни чата, ни id; такое приезжает, когда источник скрывает пересылки. Будь поля
-`NOT NULL`, такой материал нельзя было бы принять вовсе. Отдельно
-`source_username` nullable ещё и потому, что `Chat.username` в aiogram это
-`str | None`.
-
-`String(63)` — как `channels.username`. `BigInteger` для id сообщения — как
-`posts.telegram_message_id`.
-
-**`storage_chat_id` + `storage_message_id`** — координаты нашей копии, не
-nullable. Эта пара и есть долговечный хендл вместо `file_id`: она не зависит от
-токена, потому что сообщение физически лежит в канале. Материал без копии в
-хранилище публиковать нечего.
-
-**`used_in_post`** — `NULL` значит «свободен». `ON DELETE SET NULL`, как у
-`sources` и `quiz_topics`: удалили пост — материал возвращается в оборот.
-Отсюда же работает `delete_unused`, который удаляет только строку с
-`used_in_post IS NULL`.
-
-### Констрейнты
-
-**`uq_channel_material_file (channel_id, file_unique_id)`** — механизм
-дедупликации на уровне БД. Он важнее проверки в коде: `add_material` делает
-`ON CONFLICT DO NOTHING` по этому индексу, то есть проверка и вставка — один
-оператор. «Сначала SELECT, потом INSERT» пропустил бы два одновременных пересыла.
-
-`None` из репозитория означает конфликт, сервис превращает его в
-`MaterialAlreadyUsedError`.
-
-**`ix_materials_unused`** — частичный индекс по `used_in_post IS NULL`,
-скопирован с `ix_sources_unused`. **Сейчас не нужен:** материалы выбираются
-пересылкой, а не запросом «найди свободный», как у источников. Если запрос
-«покажи незадействованные материалы канала» не появится — индекс стоит выкинуть,
-это лишняя запись при каждом INSERT и UPDATE.
-
-Это же место даёт +2 ошибки mypy на `postgresql_where=cls.used_in_post.is_(None)`
-— та же жалоба, что в `source_model.py:41` и `quiz_topic_model.py:42`.
-
 ## Payload
 
 ```python
 class MaterialPayload(BaseModel):
-    title: str
-    description: str
+    title: str                      # обычный текст, жирным его делаем мы
+    description: str                # Telegram HTML от модели, ссылка внутри него
     storage_chat_id: int
     storage_message_id: int
     storage_username: str
+    photo_file_ids: list[str]
+    material_id: int | None
 
     @property
     def url(self) -> str:
-        return f"https://t.me/{self.storage_username}/{self.storage_message_id}"
+        return material_url(self.storage_username, self.storage_message_id)
 ```
 
 Ссылка **замораживается на момент создания черновика**: при публикации ничего не
 резолвится, лишних запросов нет. Поэтому `storage_username` лежит в payload, а не
 берётся из `channels` — иначе публикация зависела бы от того, не переименовали ли
-хранилище.
+хранилище. Обратная сторона: если хранилище сменит `@username` между черновиком
+и публикацией, ссылка уйдёт битой.
+
+`material_url` — функция рядом с моделью, а не только property: адрес нужен
+**до** того, как payload существует, — его отдают модели, чтобы она вставила
+ссылку в текст.
+
+`material_id` — по образцу `SourcePayload.source_id`: без него `discard` не
+нашёл бы, какую строку `materials` удалять.
 
 ## Ошибки
 
+Свои у этого типа две; остальное — ошибки хранилища, они в
+[material-storage.md](material-storage.md#ошибки-хранилища), и ошибки шаблона
+(`NotEnoughExamplesError`) — в [post-templates.md](post-templates.md#ошибки).
+
 | Ошибка | Когда |
 |---|---|
-| `MaterialNotFoundError` | нет строки по id |
-| `MaterialAlreadyUsedError` | файл уже брали для этого канала |
-| `StorageChannelNotSetError` | у канала не привязано хранилище |
-| `StorageChannelNotPublicError` | у хранилища нет `username` |
+| `InvalidMaterialDraftError` | пустой заголовок, пустое описание, нет ссылки, не влезает в 1024 |
+| `PostInputNoPhotoError` | прислали пост без картинок (презентация) |
 
 ## Что уже проверено
 
 - `PostType.MATERIAL` **уже разрешён** констрейнтом:
   `ck_posts_posttype CHECK (post_type IN ('QUIZ','MATERIAL','SOURCES','CUSTOM'))`
   — миграция под тип поста не нужна.
-- `head → downgrade → head` даёт побайтово равную схему (`pg_dump --schema-only`),
-  `alembic check` — «No new upgrade operations detected».
-- Round-trip репозитория на живом Postgres: привязка и отвязка хранилища,
-  дедупликация, пересылка со скрытым источником, `mark_used`, `delete_unused`,
-  `ON DELETE SET NULL` при удалении поста.
+- Публикация на заглушке бота: три ветки (`send_message`, `send_photo`,
+  `send_media_group`), подпись и `parse_mode` только у первого элемента альбома,
+  амперсанд в заголовке экранирован, адрес встречается ровно один раз.
+- `update_draft_payload` на живом Postgres: черновик обновляется, `SCHEDULED`
+  возвращает `None`, несуществующий пост тоже.
+- Генерация на поддельном AI-клиенте: ремонтный заход при битой разметке и при
+  скопированной из примера чужой ссылке, запасной путь дописывает адрес.
+- `build_material_input` и `read_forward_origin` на синтетических `Message`:
+  альбом с подписью на второй части, фото без подписи, текст без фото, стикер,
+  одиннадцать фото, все четыре варианта `forward_origin`.
 
-## Этап 2 — сделано
+## Поток целиком
 
-**Привязка хранилища.** Мастер канала спрашивает хранилище сразу после
-подключения канала, плюс отдельный вход «Set up channel» для каналов,
-добавленных раньше. Пикер отсекает приватные каналы флагом `chat_has_username`,
-права проверяются через `get_chat_member`, пропуск — нормальный исход.
-Подробности — [users-and-channels.md](users-and-channels.md#мастер-канала).
+```
+Create post → канал → тип «Material»
+   │
+   ├─ проверки до первого вопроса: хранилище привязано, примеров ≥ 3
+   │
+   ├─ шаг 1: картинки с описанием      (MaterialPostState.waiting_for_post)
+   │         альбом собирается MediaGroupCollector'ом
+   │
+   ├─ шаг 2: документ                  (MaterialPostState.waiting_for_document)
+   │         из forward_origin вынимается провенанс
+   │
+   └─ GenerateMaterialPostUseCase → превью → клавиатура черновика
+```
 
-**Шаблоны постов.** Таблица `post_templates` хранит 3–5 реальных постов канала
-и свободную инструкцию на пару **(канал, тип поста)**. Сводить примеры в
-описанный «шаблон» решено не пробовать: модель получает их как есть и
-абстрагирует сама, каждый раз. Админка для наполнения готова, к генерации ещё не
-подключено — `get_for_generation` ждёт вызова из `GenerateMaterialPostUseCase`.
-Всё устройство — в [post-templates.md](post-templates.md).
+Порядок «сначала картинки, потом файл» не вкусовой: текст ссылается на материал,
+а ссылка существует, только когда файл уже лежит в хранилище. Генерация поэтому
+идёт последней.
 
-Таблица общая для всех типов, но подключать её будем сначала только к
-`MATERIAL`: иначе одна задача трогает работающие `generate_quiz` и
-`generate_source`.
+### Проверки на входе
 
-## Этапы 3-5 — не начаты
+Всё, что может отказать, проверяется в `ask_for_material_post` **до первого
+`callback.answer()`** — узнать про непривязанное хранилище после того, как
+переслал картинки и файл, обиднее всего. Отказ приходит алертом через
+`error_router`.
 
-3. **Приём материала:** `MaterialPostState` (картинки с описанием → документ),
-   дедупликация по `file_unique_id` **до** заливки, заливка в хранилище.
-4. **Тип поста:** `GenerateMaterialPostUseCase` (он же зовёт
-   `PostTemplateService.get_for_generation`), `TelegramPublisher._publish_material`,
-   ветки `MATERIAL` в `discard_draft` (удалить пост в хранилище и строку
-   `materials`) и `regenerate_draft` (регенерировать нечего, как `CUSTOM`),
-   добавить в `SUPPORTED_POST_TYPES`.
-5. `allow_regenerate=False` для `MATERIAL` — упирается в пункты 26–27
-   [STATE.md](STATE.md).
+Проверяются две вещи: `channels.storage_channel_id` не `NULL` и у шаблона
+канала есть хотя бы `MIN_EXAMPLES` примеров.
 
-## Что выяснилось при планировании
+### Что делает use case
 
-**Ссылка идёт в тексте, не в кнопке.** Проверено: `SendMediaGroup` вообще не
-имеет `reply_markup`, в отличие от `SendPhoto`, `SendMessage` и `SendDocument`.
-У поста с двумя и более картинками кнопки быть не может, иначе вёрстка зависела
-бы от числа картинок.
+```
+канал → шаблон (≥3 примеров) → resolve(хранилище) → username
+   ↓
+дедуп: файла нет / свободный переиспользуем / занят → отказ
+   ↓
+залить документ → вставить строку (конфликт → снести залитое)
+   ↓
+скачать 3 картинки → генерация (примеры + инструкция + описание + картинки)
+   ↓
+проверка разметки и ссылки, при нужде один ремонтный заход
+   ↓
+длина видимого текста ≤ 1024 → create_draft → mark_used
+```
 
-**`MaterialPayload` придётся расширить `photo_file_ids`.** Пост — это картинки,
-описание и ссылка, а текст при картинках едет подписью, где лимит **1024**
-UTF-16 единицы, а не 4096. Модель надо ограничивать при генерации, иначе
-публикация упадёт уже после того, как файл уехал в хранилище.
+**`resolve` обязателен, а не для проверки.** При привязке хранилища сохранился
+только `storage_channel_id`, `username` не сохранялся никуда — а без него не
+собрать ссылку. Раз вызов неизбежен, он заодно ловит исчезнувшее хранилище до
+заливки, а не после сборки поста.
 
-**Генерация — последним шагом, после заливки.** Текст ссылается на материал, а
-ссылка существует, только когда файл уже в хранилище. Сгенерировать раньше —
-значит либо перегенерировать, либо запрещать модели упоминать ссылку.
+**Свободный материал переиспользуется, а не отвергается.** Если заливка прошла,
+а генерация упала, в базе остаётся строка с `used_in_post IS NULL` и копия в
+хранилище. Отказать на повторной пересылке того же файла означало бы тупик:
+`file_unique_id` уже занят уникальным индексом, принять его нельзя никогда.
+Логика та же, что у `find_unused` в `GenerateSourcePostUseCase`.
 
-**Придётся скачивать картинки.** Gemini нужны байты, `file_id` не подойдёт:
-`Bot.download(file, destination=None)` вернёт `BinaryIO` в памяти. Это первое
-место в проекте, где файл действительно скачивается, — оговорка в
-`payloads.py` про «ничего не скачиваем» для `MATERIAL` перестанет быть верной.
-`AIClient.ask_image` при этом возвращает `str` и не используется нигде, а
-`ask_structured` картинок не принимает: интерфейс надо расширять.
+**Гонка чинится откатом заливки.** `storage_chat_id`/`storage_message_id` в
+таблице `NOT NULL`, поэтому строку нельзя вставить раньше заливки, и порядок
+только «залить → вставить». Если на вставке сработал `ON CONFLICT`, в хранилище
+остаётся сирота — её удаляют тут же.
 
-**Открытый вопрос:** поддерживать ли `video`/`audio` кроме `document`. Разбор
-отличается только именем поля, а вот `_publish_material` придётся ветвить по
-типу, чтобы перезаливать нужным методом.
+## Текст и ссылка
 
-## Мусор рядом
+Модель отдаёт `title` обычным текстом и `description` в разметке Telegram HTML.
+**Ссылку на материал она вставляет сама**, внутрь описания, оформляя так же, как
+это сделано в примерах канала: у каждого канала свой способ, и приписывать
+ссылку хвостом значило бы ломать вёрстку.
 
-`main/domain/use_cases/generate_material.py` — пустой файл. В `app/di/use_cases.py`
-провайдер `generate_material_post = provide(GenerateSourcePostUseCase)` — имя
-врёт про содержимое. Оба числятся в [STATE.md](STATE.md).
+Адрес отдаётся модели в промпте, а результат проверяется — в том числе на то,
+что она не скопировала href из примера. Механика проверки, ремонтного захода и
+запасного пути — в [generated-markup.md](generated-markup.md).
+
+При публикации ничего не дописывается:
+
+```python
+text = f"<b>{fmt.quote(payload.title)}</b>\n\n{payload.description}"
+```
+
+Заголовок экранируется и всегда идёт жирным — это единственное оформление,
+которое делаем мы, и потому единственное, что модель не может испортить.
+
+**Ссылка в тексте, а не в кнопке.** Проверено: `SendMediaGroup` вообще не имеет
+`reply_markup`, в отличие от `SendPhoto`, `SendMessage` и `SendDocument`. У поста
+с двумя картинками кнопки быть не может, а вёрстка не должна зависеть от их
+числа.
+
+## Regenerate переписывает, а не пересоздаёт
+
+Для `QUIZ` и `SOURCES` регенерация — это «удалить черновик и сгенерировать
+заново»: там меняется сам предмет поста. Для `MATERIAL` меняется только текст,
+а материал остаётся привязанным к посту, и пересоздание строки потребовало бы
+перепривязки.
+
+Поэтому `RegenerateMaterialTextUseCase` **обновляет payload на месте** —
+`PostService.update_draft_payload`, один оператор с условием
+`status = 'DRAFT'`. Условие не формальность: оно защищает от кнопки, полежавшей
+в чате, пока планировщик забрал пост.
+
+Картинки скачиваются заново и уходят модели вместе с прошлым вариантом текста.
+Без них переписывание может только тасовать прежние слова и не исправит
+фактическую ошибку, если она там была.
+
+## Discard убирает всё
+
+Порядок в `DiscardDraftUseCase`: **сначала пост** (`used_in_post` уезжает в
+`NULL` по `ON DELETE SET NULL`), потом строка `materials`, потом копия в
+хранилище. Строка раньше копии сознательно: копия без строки — невидимый мусор,
+строка без копии публикует ссылку в никуда.
+
+Провал удаления в хранилище — `logger.warning`, а не исключение: пост уже
+удалён, откатывать нечего.
+
+## Приём ввода
+
+`build_material_input` в [`post_input.py`](../main/presentation/utils/post_input.py)
+строже соседнего `build_custom_payload`: **минимум одна картинка обязательна**.
+Пост-материал без картинок — это `SOURCES`, да и модели нечего описывать.
+
+Текстовое сообщение без фото проваливается в `PostInputNoPhotoError`, а стикер
+или видео — в `PostInputUnsupportedError`. Разделение не косметическое: у
+второго текст «I can only take plain text or a single photo», и на чистый текст
+он сообщал бы, что текст поддерживается, отказывая именно из-за текста.
+
+Описание берётся **простым текстом**, не `html_text`: оно никуда не
+публикуется, а уезжает модели как факты о материале.
+
+`read_forward_origin` разбирает `forward_origin`. Только `MessageOriginChannel`
+несёт `message_id` — остальные варианты union'а дают либо один чат, либо ничего.
+
+## Что осталось
+
+- **`video`/`audio` не поддерживаются**, только `document`. Разбор отличался бы
+  только именем поля, но `_publish_material` и `MaterialStorage.store` пришлось
+  бы ветвить по типу.
+- **Живьём поток не проверялся.** Всё, что сделано, проверено на заглушках,
+  синтетических `Message` и одноразовой базе. Ни `get_chat` по хранилищу, ни
+  заливка, ни публикация альбома с подписью через настоящий Telegram не
+  проходили.
+- **Качество генерации неизвестно.** Первые ручки, если описания выйдут мимо:
+  порядок частей в запросе (сейчас картинки идут после текста, Google советует
+  наоборот) и `thinking_budget`, который сейчас нулевой.

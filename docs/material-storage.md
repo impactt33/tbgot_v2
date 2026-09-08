@@ -1,0 +1,197 @@
+# Хранилище материалов
+
+Своя копия чужого файла и всё, что вокруг неё: почему копия нужна, где лежит и
+как учитывается.
+
+> **Главные файлы:**
+> [`models/material_model.py`](../main/data/models/material_model.py) ·
+> [`entities/material_entity.py`](../main/domain/entities/material_entity.py) ·
+> [`repositories/material_repo.py`](../main/domain/repositories/material_repo.py) +
+> [impl](../main/data/repositories_impl/material_repo_impl.py) ·
+> [`services/material_service.py`](../main/domain/services/material_service.py) +
+> [impl](../main/domain/services_impl/material_service_impl.py)
+> **Клиент:** [`clients/telegram/material_storage.py`](../main/domain/clients/telegram/material_storage.py) +
+> [impl](../main/data/clients_impl/telegram/telegram_material_storage.py)
+> **Рядом:** `storage_channel_id` в [`channel_model.py`](../main/data/models/channel_model.py) ·
+> миграция [`bdf76a3344c2`](../migration/versions/bdf76a3344c2_materials_table_and_storage_channel.py)
+> **Кто пользуется:** [post-type-material.md](post-type-material.md)
+
+## Почему админ пересылает файл вручную
+
+Всё автоматическое проверено и не работает. Бота в чужой канал добавить нельзя —
+каналы не принадлежат владельцу бота, а добавить бота может только админ канала.
+Дальше:
+
+- `copyMessage` / `forwardMessage` из чужого канала → `Bad Request: message to
+  copy not found` на шести разных `message_id`. Контроль на несуществующем канале
+  даёт **другую** ошибку (`chat not found`), то есть дело в доступе, а не в
+  существовании поста.
+- **Метода вступления в Bot API нет.** Из 181 метода есть `leave_chat`,
+  `join_chat` — нет.
+- Читающих методов тоже нет: ни `getMessage`, ни `getChatHistory`.
+- `getFile` принимает `file_id`, а он приходит только в апдейте из чата, где бот
+  состоит. Свой Bot API-сервер снимает лимиты 20/50 МБ, но ходит с **теми же
+  правами**.
+- Публичная веб-версия `t.me` отдаёт фото и видео прямыми ссылками на
+  `cdn*.telesco.pe`, но **не документы**: у постов с файлами в разметке нет ни
+  одного класса контента, только «Please open Telegram to view this post».
+
+Отсюда принятая схема: **админ пересылает материал боту в личку.** Это не
+автоматизация аккаунта, а человек в своём клиенте.
+
+Из пересланного сообщения бот получает сразу всё:
+
+| Что | Откуда | Зачем |
+|---|---|---|
+| `document.file_id` | сообщение | перезалить в хранилище |
+| `document.file_unique_id` | сообщение | дедупликация |
+| `forward_origin.chat` + `.message_id` | `MessageOriginChannel` | источник заполняется сам |
+
+Перезалив идёт по `file_id`, файл не скачивается — лимиты 20 и 50 МБ не
+задействованы.
+
+## Хранилище обязано быть публичным
+
+Ссылка на пост в приватном канале имеет вид `t.me/c/<shifted_id>/<msg>` и
+открывается **только у участников этого канала**. Подписчик основного канала
+нажмёт кнопку и не получит ничего. Поэтому мастер привязки обязан отклонять
+канал без `username` — `StorageChannelNotPublicError`.
+
+## `channels.storage_channel_id`
+
+`BigInteger`, nullable, **без FK**. Хранилище — не постинговый канал и своей
+строки в `channels` не имеет, ссылаться не на что. Nullable — новостному каналу
+материалы не нужны.
+
+Правится через `ChannelService.set_storage_channel(channel_id, storage_channel_id)`;
+`None` отвязывает.
+
+## Таблица `materials` по полям
+
+```python
+id              Integer PK              # int4, как posts.id и sources.id
+channel_id      BigInteger FK→channels CASCADE
+file_unique_id  String(127)
+
+source_chat_id     BigInteger  null
+source_username    String(63)  null
+source_message_id  BigInteger  null
+
+storage_chat_id     BigInteger
+storage_message_id  BigInteger
+
+created_at    DateTime(tz) server_default=now()
+used_in_post  Integer FK→posts SET NULL
+```
+
+**`id` — `Integer`, а не `BigInteger`,** как `posts.id` и `sources.id`. Держи в
+голове граблю: `posts.id` это int4, а `channels.channel_id` — BigInteger;
+подстановка id канала туда, где ждут id поста, даёт `OverflowError`, обратная
+пройдёт молча.
+
+**`channel_id`** — постинговый канал, для которого материал взят. Не хранилище и
+не источник. `CASCADE`: удалили канал — материалы под него уезжают следом. Из-за
+этого поля дедупликация получается **по каналу**, а не глобальная: один файл
+можно взять в два разных канала (проверено).
+
+**`file_unique_id`** — ключ дедупликации. Не `file_id`, хотя качать и
+перепощивать умеет только он. Из документации Bot API:
+
+> **file_id**: «can be used to download or reuse the file»
+> **file_unique_id**: «is supposed to be the same over time and for different
+> bots. **Can't be used to download or reuse the file**»
+
+Нам нужно сравнивать, а не качать: `file_unique_id` переживает смену токена,
+`file_id` — нет. Сам `file_id` в таблице **не хранится вообще** — он нужен ровно
+один раз, в момент заливки в хранилище. `String(127)` с запасом: реальные
+значения короче, документированного максимума нет.
+
+**`source_*` — три nullable-поля,** провенанс из `forward_origin`. Nullable,
+потому что `forward_origin` это union из четырёх вариантов, и канал несёт только
+один. `MessageOriginHiddenUser` содержит `['type', 'date', 'sender_user_name']` —
+ни чата, ни id; такое приезжает, когда источник скрывает пересылки. Будь поля
+`NOT NULL`, такой материал нельзя было бы принять вовсе. Отдельно
+`source_username` nullable ещё и потому, что `Chat.username` в aiogram это
+`str | None`.
+
+`String(63)` — как `channels.username`. `BigInteger` для id сообщения — как
+`posts.telegram_message_id`.
+
+**`storage_chat_id` + `storage_message_id`** — координаты нашей копии, не
+nullable. Эта пара и есть долговечный хендл вместо `file_id`: она не зависит от
+токена, потому что сообщение физически лежит в канале. Материал без копии в
+хранилище публиковать нечего.
+
+**`used_in_post`** — `NULL` значит «свободен». `ON DELETE SET NULL`, как у
+`sources` и `quiz_topics`: удалили пост — материал возвращается в оборот.
+Отсюда же работает `delete_unused`, который удаляет только строку с
+`used_in_post IS NULL`.
+
+### Констрейнты
+
+**`uq_channel_material_file (channel_id, file_unique_id)`** — механизм
+дедупликации на уровне БД. Он важнее проверки в коде: `add_material` делает
+`ON CONFLICT DO NOTHING` по этому индексу, то есть проверка и вставка — один
+оператор. «Сначала SELECT, потом INSERT» пропустил бы два одновременных пересыла.
+
+`None` из репозитория означает конфликт, сервис превращает его в
+`MaterialAlreadyUsedError`.
+
+**`ix_materials_unused`** — частичный индекс по `used_in_post IS NULL`,
+скопирован с `ix_sources_unused`. **Сейчас не нужен:** материалы выбираются
+пересылкой, а не запросом «найди свободный», как у источников. Если запрос
+«покажи незадействованные материалы канала» не появится — индекс стоит выкинуть,
+это лишняя запись при каждом INSERT и UPDATE.
+
+Это же место даёт +2 ошибки mypy на `postgresql_where=cls.used_in_post.is_(None)`
+— та же жалоба, что в `source_model.py:41` и `quiz_topic_model.py:42`.
+
+## Клиент `MaterialStorage`
+
+Три метода, один предмет — наша копия файла и канал, где она лежит:
+
+```python
+async def resolve(self, storage_chat_id: int) -> str    # username, он же проверка доступности
+async def store(self, file_id: str, storage_chat_id: int) -> int   # -> message_id
+async def remove(self, storage_chat_id: int, message_id: int) -> bool
+```
+
+**Канал едет аргументом, а не живёт на объекте.** Клиент в `Scope.APP`, один на
+процесс, а бот обслуживает несколько постинговых каналов, и у каждого своё
+хранилище в `channels.storage_channel_id`. Зашей id в конструктор — второй канал
+станет постить в чужой склад.
+
+**Почему отдельный ABC, а не метод в `Publisher`.** Домену запрещено
+импортировать `aiogram`, поэтому исходящий вызов обязан прятаться за
+интерфейсом — вопрос был только в том, за каким. `Publisher.publish` про то, как
+пост становится сообщением канала; `resolve`/`store`/`remove` про склад файлов и
+о существовании поста ничего не знают. Слепи их вместе — и `DiscardDraftUseCase`,
+который ничего не публикует, получит в зависимости публикатор ради одного
+`delete_message`.
+
+**Заливка — `send_document` по `file_id`, а не `copy_message`.** `file_id`
+принимается везде, где Bot API принимает загрузку, поэтому файл не проходит через
+нас: ни скачивания, ни лимита 20 МБ. `copy_message` тоже сработал бы, но ему
+нужно, чтобы сообщение админа всё ещё существовало, а этому — нет. Шлём с
+`disable_notification=True`: хранилище публичное, у него свои подписчики, и они
+не подписывались на уведомление о каждом залитом файле.
+
+**`remove` возвращает `bool`, а не кидает.** Оба вызывающих места убирают за
+чем-то другим — за неудавшейся вставкой или за удалённым постом, — и уборка
+никогда не должна заслонять то, за чем она убирает.
+
+## Ошибки хранилища
+
+| Ошибка | Когда |
+|---|---|
+| `StorageChannelNotSetError` | у канала не привязано хранилище |
+| `StorageChannelNotPublicError` | у хранилища нет `username` |
+| `StorageChannelUnreachableError` | `get_chat` не отвечает: канал удалён или бота выгнали |
+| `MaterialStorageError` | заливка не прошла |
+| `MaterialNotFoundError` | нет строки по id |
+| `MaterialAlreadyUsedError` | файл уже брали для этого канала |
+
+`StorageChannelUnreachableError` существует потому, что у `storage_channel_id`
+нет внешнего ключа — хранилище не постинговый канал и своей строки в `channels`
+не имеет. Ничто не мешает удалить его или выгнать оттуда бота, и обнаруживается
+это только вызовом.

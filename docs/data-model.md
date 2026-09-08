@@ -73,6 +73,9 @@ pydantic-моделями из `main/domain/entities/payloads.py`: `QuizPayload`
 не знает, поэтому `model_validate` может упасть на любой существующей строке —
 это учтено в `PublishPostUseCase` (см. [posts.md](posts.md)).
 
+Менять payload у существующего черновика умеет `update_draft_payload` — только
+для `DRAFT`, см. [posts.md](posts.md#update_draft_payload).
+
 ### `quiz_topics` и `sources` — один шаблон
 
 Обе устроены одинаково, отсюда легко читать третью, `materials`:

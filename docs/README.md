@@ -20,7 +20,9 @@
 | [post-type-quiz.md](post-type-quiz.md) | тип `QUIZ` |
 | [post-type-sources.md](post-type-sources.md) | тип `SOURCES` |
 | [post-type-custom.md](post-type-custom.md) | тип `CUSTOM`, альбомы |
-| [post-type-material.md](post-type-material.md) | тип `MATERIAL` — **в работе** |
+| [post-type-material.md](post-type-material.md) | тип `MATERIAL`: сбор, генерация, публикация |
+| [material-storage.md](material-storage.md) | копия файла в канале-хранилище, таблица `materials` |
+| [generated-markup.md](generated-markup.md) | проверка HTML, который написала модель |
 | [post-templates.md](post-templates.md) | примеры и инструкция на пару (канал, тип) |
 | [scheduling.md](scheduling.md) | отложенная публикация, ввод времени |
 | [bot-ui.md](bot-ui.md) | экраны, кнопки, CallbackData, FSM |

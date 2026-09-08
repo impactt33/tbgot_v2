@@ -53,15 +53,18 @@ AppError
 │                       PostAlreadyPublished, PostNotDraft, PostNotClaimed, PostNotScheduled
 ├─ QuizTopicError     ─ QuizTopicNotFound, CannotGenerateTopic, InvalidQuizDraft
 ├─ SourceError        ─ SourceNotFound, NoSourceFound, InvalidSourceDraft
-├─ MaterialError      ─ MaterialNotFound, MaterialAlreadyUsed,
-│                       StorageChannelNotSet, StorageChannelNotPublic
+├─ MaterialError      ─ MaterialNotFound, MaterialAlreadyUsed, InvalidMaterialDraft,
+│                       StorageChannelNotSet, StorageChannelNotPublic,
+│                       StorageChannelUnreachable, MaterialStorage
 ├─ PostTemplateError  ─ PostTemplateNotFound, ExampleNotFound,
 │                       TooManyExamples, NotEnoughExamples
 ├─ AIClientError      ─ RequestFailed, AnswerIsEmpty, AIClientUnavailable,
 │                       AIClientRejected, AIClientUnparsableAnswer, AnswerTooBig
+├─ MediaError         ─ MediaDownload
 ├─ PublisherError     ─ PublishError
 └─ (presentation)     ─ TimeInputError, TimeInPastError,
-                        PostInputError → Empty / Unsupported / TooLong / TooManyPhotos
+                        PostInputError → Empty / Unsupported / TooLong /
+                                         TooManyPhotos / NoPhoto
 ```
 
 Ошибки презентации живут отдельно, в `main/presentation/errors.py`: они про

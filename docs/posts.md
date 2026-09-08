@@ -144,9 +144,14 @@ scopes opened: 2`.
 
 | | `delete_draft` (сервис) | `DiscardDraftUseCase` |
 |---|---|---|
-| что делает | удаляет строку поста | удаляет пост **и** освобождающую его тему/ресурс |
-| когда | Regenerate | Discard |
+| что делает | удаляет строку поста | удаляет пост **и** освобождающую его тему/ресурс/материал |
+| когда | Regenerate у `QUIZ` и `SOURCES` | Discard |
 | зачем | тема нужна для новой попытки | тема возвращается в общий пул |
+
+**У `MATERIAL` регенерация устроена иначе** — она не удаляет пост вовсе, а
+переписывает `payload` на месте через `update_draft_payload`. Материал привязан
+к посту, и пересоздание строки потребовало бы перепривязки. Подробности —
+[post-type-material.md](post-type-material.md#regenerate-переписывает-а-не-пересоздаёт).
 
 Порядок внутри `DiscardDraftUseCase` важен: `used_in_post` объявлен
 `ON DELETE SET NULL`, поэтому **сначала удаляется пост** (тем самым освобождая
@@ -159,9 +164,14 @@ scopes opened: 2`.
 match post.post_type:
     case PostType.QUIZ:    topic_id = QuizPayload.model_validate(post.payload).topic_id
     case PostType.SOURCES: source_id = SourcePayload.model_validate(post.payload).source_id
+    case PostType.MATERIAL: material = MaterialPayload.model_validate(post.payload)
     case PostType.CUSTOM:  pass          # за ручным постом нет ни темы, ни ресурса
     case _:                raise UnsupportedPostTypeError(post.post_type)
 ```
+
+У `MATERIAL` уборка длиннее на шаг: после строки `materials` удаляется ещё и
+копия файла в хранилище. Порядок «строка, потом копия» сознателен — копия без
+строки невидимый мусор, строка без копии публикует ссылку в никуда.
 
 На `else` наступали трижды: `CUSTOM` проваливался в ветку `SOURCES`. Отдельно —
 `raise` обязателен: выражение `UnsupportedPostTypeError(post.post_type)` без
@@ -177,7 +187,7 @@ match post.post_type:
 | `QUIZ` | `send_poll(type=QUIZ)` | анонимный, с `explanation` |
 | `SOURCES` | `send_message` | ссылка через `LinkPreviewOptions`, не в тексте |
 | `CUSTOM` | `send_message` / `send_photo` / `send_media_group` | см. [post-type-custom.md](post-type-custom.md) |
-| `MATERIAL` | — | ещё не реализовано |
+| `MATERIAL` | `send_message` / `send_photo` / `send_media_group` | см. [post-type-material.md](post-type-material.md) |
 
 `TelegramAPIError` заворачивается в `PublishError`; всё остальное летит наверх
 как есть и ловится широким `except` в use case.
@@ -185,3 +195,18 @@ match post.post_type:
 `PreviewPostUseCase` — тот же `publisher.publish`, но `chat_id` = id админа.
 Превью и публикация проходят один и тот же код, поэтому «в превью выглядело
 иначе» невозможно by design.
+
+## `update_draft_payload`
+
+Появился под регенерацию `MATERIAL` и годится шире: заменить содержимое
+черновика, не трогая строку.
+
+```sql
+UPDATE posts SET payload = ... WHERE id = ... AND status = 'DRAFT' RETURNING *
+```
+
+Условие на статус — **`DRAFT` и только он**, в отличие от `delete_draft`,
+который берёт ещё и `SCHEDULED`. Переписать пост, на который уже рассчитывает
+планировщик, — решение другого рода, и интерфейс о нём не просит. `None` наверху
+превращается в `PostNotDraftError`; так ловится кнопка, полежавшая в чате, пока
+пост забрали.
