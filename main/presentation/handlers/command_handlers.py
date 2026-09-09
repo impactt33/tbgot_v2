@@ -12,13 +12,14 @@ from main.domain.services import UserService
 from main.presentation.keyboards import admin_menu_keyboard, main_menu_keyboard
 from main.presentation.states import BOT_STATES
 
+from aiogram.utils.text_decorations import html_decoration as fmt
+
 command_router = Router(name = __name__)
 
 logger = logging.getLogger(__name__)
 
 MENU_TEXT = "What do you want to do?"
 NO_ACCESS_TEXT = "You don't have access yet. Ask an admin (@Immpactt) to grant you rights."
-
 
 @command_router.message(CommandStart()) #type: ignore
 async def command_start(message: types.Message, role: UserRole, user_service: FromDishka[UserService]):

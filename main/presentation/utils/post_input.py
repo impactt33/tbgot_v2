@@ -6,7 +6,8 @@ Dispatcher: what we accept, what we refuse, and how long is too long.
 An album arrives as several updates rather than one message, so everything here
 takes a list. A plain post is simply a list of one.
 """
-from aiogram.types import Message, MessageOriginChannel, MessageOriginChat
+from aiogram.types import Message, MessageOriginChannel, MessageOriginChat, Poll
+from aiogram.utils.text_decorations import html_decoration as fmt
 from pydantic import BaseModel
 
 from main.domain.entities import CustomPayload
@@ -23,6 +24,8 @@ from main.presentation.errors import (
 CAPTION_LIMIT = 1024
 TEXT_LIMIT = 4096
 ALBUM_LIMIT = 10
+# A quiz explanation, the same limit the Bot API puts on send_poll.
+POLL_EXPLANATION_LIMIT = 200
 
 
 def tg_length(text: str) -> int:
@@ -164,3 +167,44 @@ def read_forward_origin(message: Message) -> ForwardSource:
         )
 
     return ForwardSource()
+
+
+_EXPLANATION_LABEL = "Пояснение: "
+
+
+def render_poll_example(poll: Poll) -> str:
+    """A forwarded quiz written out the way the template stores its examples.
+
+    Telegram never sends formatted text: it sends a raw string plus entity
+    coordinates. fmt.unparse puts them back together - the same thing
+    message.html_text does, which Poll has no equivalent of, because it has
+    three separate fields that could carry formatting.
+
+    Neither the explanation nor the correct option survives a forward - checked
+    by hand, and the Bot API documents the caveat only for the latter. The
+    correct option is no loss: it says nothing about the manner, which is the
+    only thing examples teach. The explanation is asked of the admin instead.
+
+    The labels are Russian on purpose: this text is read by the model, not by
+    the admin, and the prompts are Russian.
+    """
+    lines = [f"Вопрос: {fmt.unparse(poll.question, poll.question_entities)}"]
+
+    if poll.description:
+        lines.append(
+            f"Описание: {fmt.unparse(poll.description, poll.description_entities)}"
+        )
+
+    lines.append("Варианты:")
+    lines.extend(f"- {option.text}" for option in poll.options)
+
+    return "\n".join(lines)
+
+
+def with_explanation(example: str, explanation: str) -> str:
+    """Add the block a forwarded poll could not bring with it.
+
+    Kept next to render_poll_example so the label is written once: an example
+    whose block is worded differently from the others teaches the model noise.
+    """
+    return f"{example}\n{_EXPLANATION_LABEL}{explanation}"

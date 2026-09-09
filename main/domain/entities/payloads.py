@@ -2,13 +2,35 @@ from pydantic import BaseModel, Field
 
 
 class QuizPayload(BaseModel):
+    """A quiz poll: PostType.QUIZ.
+
+    Telegram formats a poll in four different ways, and only two of them take
+    markup. `question` and `options` accept custom emoji entities and nothing
+    else, so they are plain text and go out with parse_mode switched off.
+    `description` and `explanation` are Telegram HTML, checked before the draft
+    was stored.
+
+    `description` defaults to empty because quizzes created before it existed
+    have no such key in their payload, and publishing a scheduled one must not
+    fail on that.
+    """
+
     question: str = Field(max_length=300)
+    description: str = ""
     options: list[str] = Field(min_length=2, max_length=12)
     correct_index: int = Field(ge=0)
-    explanation: str = Field(max_length=200)
+    explanation: str = Field(max_length=400)
     topic_id: int
 
 class SourcePayload(BaseModel):
+    """A post about an external resource: PostType.SOURCES.
+
+    `title` is plain text and gets escaped and bolded at publish time. `text`
+    is Telegram HTML the model wrote, checked before the draft was stored, and
+    the link to the resource lives inside it - styled the way the channel
+    styles links.
+    """
+
     title: str
     text: str
     url: str

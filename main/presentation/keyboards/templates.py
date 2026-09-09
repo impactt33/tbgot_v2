@@ -127,3 +127,17 @@ def back_to_template_keyboard(channel_id: int, post_type: PostType) -> InlineKey
         )
     )
     return builder.as_markup()
+
+
+def skip_explanation_keyboard(channel_id: int, post_type: PostType) -> InlineKeyboardMarkup:
+    """The only way out of "write an explanation" that is not writing one."""
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="Skip",
+        callback_data=TemplateCB(
+            action=TemplateAction.SKIP_EXPLANATION,
+            channel_id=channel_id,
+            post_type=post_type
+        )
+    )
+    return builder.as_markup()

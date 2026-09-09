@@ -11,6 +11,7 @@ class TemplateAction(str, Enum):
     LIST_EXAMPLES = "list_ex"
     SET_INSTRUCTION = "set_in"
     CLEAR_INSTRUCTION = "clr_in"
+    SKIP_EXPLANATION = "skip_ex"
 
 
 class TemplateTypesCB(CallbackData, prefix="tpt"):

@@ -25,12 +25,13 @@ from main.presentation.callbacks import MenuCB, MenuAction, SetupChannelCB, Stor
 from main.presentation.filters import IsAdminFilter
 from main.presentation.keyboards import roles_keyboard, choose_channel_keyboard, admin_menu_keyboard, \
     main_menu_keyboard, choose_storage_keyboard, setup_channels_keyboard, storage_prompt_keyboard, \
-    back_to_template_keyboard, examples_keyboard, template_keyboard, template_types_keyboard
+    back_to_template_keyboard, examples_keyboard, skip_explanation_keyboard, template_keyboard, \
+    template_types_keyboard
 from main.presentation.keyboards.add_channel import POSTING_REQUEST_ID, STORAGE_REQUEST_ID
 from main.presentation.keyboards.roles import ROLE_CALLBACK_PREFIX
 from main.presentation.states import AdminProvideRightsState, AdminChannelActionState, TemplateState
-from main.presentation.utils import render, tg_length
-from main.presentation.utils.post_input import TEXT_LIMIT
+from main.presentation.utils import render, render_poll_example, tg_length, with_explanation
+from main.presentation.utils.post_input import POLL_EXPLANATION_LIMIT, TEXT_LIMIT
 
 admin_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
@@ -78,6 +79,17 @@ INSTRUCTION_TOO_LONG_TEXT = (
 )
 TEMPLATE_STATE_LOST_TEXT = (
     "I lost track of which template that was for. Start again from the menu."
+)
+QUIZ_EXPLANATION_TEXT = (
+    "Quiz saved. Now write its explanation - the text a reader sees after "
+    "answering.\n"
+    "It never comes along with a forwarded quiz, so it has to be typed by hand. "
+    f"Up to {POLL_EXPLANATION_LIMIT} characters.\n\n"
+    "Or tap Skip - the example works without one."
+)
+QUIZ_EXPLANATION_NOT_TEXT = "Send the explanation as text, or tap Skip."
+QUIZ_EXPLANATION_TOO_LONG_TEXT = (
+    "That is {length} characters, and an explanation is limited to {limit}."
 )
 
 
@@ -422,6 +434,10 @@ async def on_example_received(
     text = message.html_text
 
     if not text:
+        if message.poll is not None:
+            await _ask_for_quiz_explanation(message, message.poll, state)
+            return
+
         if message.media_group_id is None:
             await message.answer(EXAMPLE_EMPTY_TEXT)
         return
@@ -443,6 +459,117 @@ async def on_example_received(
     await state.clear()
     view_text, markup = _template_view(channel_id, post_type, template)
     await message.answer(view_text, reply_markup=markup)
+
+async def _ask_for_quiz_explanation(
+    message: types.Message, poll: types.Poll, state: FSMContext
+) -> None:
+    """A forwarded poll is the only way to add a QUIZ example.
+
+    A poll carries no text at all, so it arrives here through the "nothing to
+    store" branch rather than the usual one.
+    """
+    target = await _template_target(message, state)
+
+    if target is None:
+        return
+
+    channel_id, post_type = target
+
+    if post_type is not PostType.QUIZ:
+        # A poll in a template for any other type would be junk in the examples.
+        await message.answer(EXAMPLE_EMPTY_TEXT)
+        return
+
+    await state.set_state(TemplateState.waiting_for_quiz_explanation)
+    await state.update_data(example=render_poll_example(poll))
+
+    await message.answer(
+        QUIZ_EXPLANATION_TEXT,
+        reply_markup=skip_explanation_keyboard(channel_id, post_type)
+    )
+
+@admin_router.message(TemplateState.waiting_for_quiz_explanation, F.text)
+async def on_quiz_explanation_received(
+    message: types.Message,
+    state: FSMContext,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    # html_text, not text: the admin may format the explanation, and Telegram
+    # takes markup in that field - so the example keeps it.
+    explanation = message.html_text
+    length = tg_length(message.text or "")
+
+    if length > POLL_EXPLANATION_LIMIT:
+        await message.answer(
+            QUIZ_EXPLANATION_TOO_LONG_TEXT.format(
+                length=length, limit=POLL_EXPLANATION_LIMIT
+            )
+        )
+        return
+
+    target = await _template_target(message, state)
+
+    if target is None:
+        return
+
+    data = await state.get_data()
+    example: str | None = data.get("example")
+
+    if example is None:
+        await state.clear()
+        await message.answer(TEMPLATE_STATE_LOST_TEXT)
+        return
+
+    channel_id, post_type = target
+    template = await template_service.add_example(
+        channel_id, post_type, with_explanation(example, explanation)
+    )
+
+    await state.clear()
+    view_text, markup = _template_view(channel_id, post_type, template)
+    await message.answer(view_text, reply_markup=markup)
+
+@admin_router.message(TemplateState.waiting_for_quiz_explanation)
+async def on_quiz_explanation_not_text(message: types.Message) -> None:
+    """Anything that is not text, registered after the handler that takes it.
+
+    Without this the bot goes quiet and the admin has no way to tell the state
+    is still waiting. Defects 14 and 35 in STATE.md are that same silence.
+    """
+    await message.answer(QUIZ_EXPLANATION_NOT_TEXT)
+
+@admin_router.callback_query(TemplateCB.filter(F.action == TemplateAction.SKIP_EXPLANATION))
+async def skip_quiz_explanation(
+    callback: CallbackQuery,
+    callback_data: TemplateCB,
+    state: FSMContext,
+    template_service: FromDishka[PostTemplateService]
+) -> None:
+    """Store the quiz with no explanation block at all.
+
+    No block rather than an empty one: three examples ending in "Пояснение:"
+    with nothing after it would teach the model that explanations are left
+    blank.
+    """
+    data = await state.get_data()
+    example: str | None = data.get("example")
+
+    if example is None:
+        await state.clear()
+        await callback.answer(TEMPLATE_STATE_LOST_TEXT, show_alert=True)
+        return
+
+    # add_example raises when the fifth example is already there, and that alert
+    # has to reach the user - so it runs before answer().
+    template = await template_service.add_example(
+        callback_data.channel_id, callback_data.post_type, example
+    )
+
+    await state.clear()
+    text, markup = _template_view(callback_data.channel_id, callback_data.post_type, template)
+
+    await callback.answer()
+    await render(callback, text, markup)
 
 @admin_router.callback_query(TemplateCB.filter(F.action == TemplateAction.LIST_EXAMPLES))
 async def show_examples_for_remove(

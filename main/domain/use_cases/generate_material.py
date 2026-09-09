@@ -35,15 +35,13 @@ from main.domain.services import (
     PostService,
     PostTemplateService,
 )
-from main.domain.use_cases.ai_guard import unwrap_ai
 from main.domain.use_cases.html_guard import (
     ALLOWED_TAGS_HINT,
-    check_telegram_html,
-    extract_links,
-    fallback_plain,
+    has_link,
     strip_tags,
     visible_length,
 )
+from main.domain.use_cases.markup_repair import ask_with_valid_markup
 
 logger = logging.getLogger(__name__)
 
@@ -101,17 +99,6 @@ _REWRITE_BLOCK = """
 Прошлый заголовок: {title}
 Прошлый текст: {description}
 """
-
-_REPAIR_PROMPT = """Разметка в поле description неверна:
-{problems}
-
-Заголовок: {title}
-Текст: {description}
-
-Верни тот же пост — тот же заголовок и тот же смысл — с исправленной разметкой.
-Разрешены только теги {allowed_tags}. Символы < > & вне тегов пиши как
-&lt; &gt; &amp;. Ссылка на материал должна остаться в тексте, адрес — {url}."""
-
 
 class MaterialDraft(BaseModel):
     title: str = Field(
@@ -176,38 +163,6 @@ def _build_prompt(
     )
 
 
-def _has_link(description: str, url: str) -> bool:
-    """Whether the material is linked at all, however the model wrote it.
-
-    An anchor is what the prompt asks for, but a bare address pasted into the
-    text is auto-linked by Telegram and works just as well - and it is what the
-    fallback path leaves behind.
-    """
-    return url in extract_links(description) or url in strip_tags(description)
-
-
-def _draft_problems(description: str, url: str) -> list[str]:
-    """Everything wrong with the generated text, markup and link alike.
-
-    The link is part of the writing now, not a line appended after it, so its
-    absence is a defect of the same kind as an unclosed tag and goes through
-    the same repair round.
-    """
-    problems = check_telegram_html(description)
-
-    if not _has_link(description, url):
-        problems.append(f"the link to the material is missing, it has to be {url}")
-
-    problems.extend(
-        f"the post links to {href}, which is a different material - the only "
-        f"address allowed here is {url}"
-        for href in dict.fromkeys(extract_links(description))
-        if href != url
-    )
-
-    return problems
-
-
 async def _generate_text(
     ai_client: AIClient,
     media_downloader: MediaDownloader,
@@ -217,60 +172,23 @@ async def _generate_text(
     url: str,
     previous: MaterialDraft | None = None,
 ) -> MaterialDraft:
-    """Ask for the post, then make sure its markup is markup Telegram takes.
+    """Ask for the post. Valid markup and a working link are guaranteed by
+    markup_repair, which owns the repair round and the fallback.
 
     Shared by writing a post and by rewriting one, which differ only in the
     "here is the previous attempt" block.
     """
     images = await media_downloader.download_many(photo_file_ids[:_PROMPT_IMAGES])
 
-    draft = unwrap_ai(
-        await ai_client.ask_structured(
-            _build_prompt(template, description, url, previous),
-            MaterialDraft,
-            system=_SYSTEM,
-            images=images,
-        )
+    return await ask_with_valid_markup(
+        ai_client,
+        _build_prompt(template, description, url, previous),
+        MaterialDraft,
+        fields=("description",),
+        system=_SYSTEM,
+        images=images,
+        required_link=url,
     )
-
-    problems = _draft_problems(draft.description, url)
-
-    if not problems:
-        return draft
-
-    # One repair round, not a loop. The problems go along verbatim: a model
-    # fixes a named mistake far better than it re-rolls the whole post.
-    logger.info("Model returned unusable markup: %s", problems)
-
-    repaired = unwrap_ai(
-        await ai_client.ask_structured(
-            _REPAIR_PROMPT.format(
-                problems="\n".join(f"- {problem}" for problem in problems),
-                title=draft.title,
-                description=draft.description,
-                allowed_tags=ALLOWED_TAGS_HINT,
-                url=url,
-            ),
-            MaterialDraft,
-            system=_SYSTEM,
-        )
-    )
-
-    if not _draft_problems(repaired.description, url):
-        return repaired
-
-    # Formatting is worth less than a post the admin can publish. The words
-    # survive, the markup goes, and Regenerate is one tap away.
-    logger.warning("Markup still broken after a repair round, dropping it")
-
-    plain = fallback_plain(repaired.description)
-
-    # Stripping the markup takes the anchor with it, and the address lived in
-    # the href. Without it the post describes a file nobody can reach.
-    if url not in plain:
-        plain = f"{plain}\n\n{url}"
-
-    return MaterialDraft(title=repaired.title, description=plain)
 
 
 def _validate(payload: MaterialPayload) -> None:
@@ -281,7 +199,7 @@ def _validate(payload: MaterialPayload) -> None:
     if not strip_tags(payload.description).strip():
         raise InvalidMaterialDraftError("Description has no text in it.")
 
-    if not _has_link(payload.description, payload.url):
+    if not has_link(payload.description, payload.url):
         raise InvalidMaterialDraftError("The material is not linked from the text.")
 
     # Counted the way Telegram counts a caption: visible text only, UTF-16
@@ -348,8 +266,6 @@ class GenerateMaterialPostUseCase:
             request.description,
             url,
         )
-
-        logger.info(f"AAA model answered: {draft.description}")
 
         payload = MaterialPayload(
             title=draft.title,

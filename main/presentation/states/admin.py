@@ -11,3 +11,4 @@ class AdminChannelActionState(StatesGroup):
 class TemplateState(StatesGroup):
     waiting_for_example = State()
     waiting_for_instruction = State()
+    waiting_for_quiz_explanation = State()

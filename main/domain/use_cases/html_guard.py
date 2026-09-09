@@ -207,3 +207,36 @@ def extract_links(text: str) -> list[str]:
     collector.feed(text)
     collector.close()
     return collector.hrefs
+
+
+def has_link(text: str, url: str) -> bool:
+    """Whether the address is in the text at all, however it was written.
+
+    An anchor is what the prompts ask for, but a bare address pasted into the
+    text is auto-linked by Telegram and works just as well - and a bare address
+    is exactly what the fallback path leaves behind.
+    """
+    return url in extract_links(text) or url in strip_tags(text)
+
+
+def check_link(text: str, url: str) -> list[str]:
+    """The link rules: this address has to be there, and no other may be.
+
+    The second half matters more than it looks. The examples a channel's
+    template holds are its own previous posts, each linking somewhere else -
+    and a model told to reproduce the manner copies an href as readily as a
+    turn of phrase. The result looks perfect and points at the wrong thing.
+    """
+    found: list[str] = []
+
+    if not has_link(text, url):
+        found.append(f"the link is missing, the text has to contain {url}")
+
+    found.extend(
+        f"the text links to {href}, which is not what this post is about - "
+        f"the only address allowed here is {url}"
+        for href in dict.fromkeys(extract_links(text))
+        if href != url
+    )
+
+    return found

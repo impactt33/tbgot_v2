@@ -36,11 +36,26 @@ class TelegramPublisher(Publisher):
             raise PublishError(post.id, exc) from exc
 
     async def _publish_quiz(self, post: PostEntity, chat_id: int) -> int:
+        """Four fields, and only two of them take markup.
+
+        question_parse_mode and the options' text_parse_mode are switched off
+        explicitly. They default to the bot's global HTML, and the Bot API
+        allows nothing but custom emoji there - so a question with an "&" in it
+        used to fail to publish with "can't parse entities". Off means the text
+        goes literally, and nothing has to be escaped.
+
+        description and explanation keep the default HTML: that is where the
+        channel's formatting lives.
+        """
         payload = QuizPayload.model_validate(post.payload)
         message = await self.bot.send_poll(
             chat_id=chat_id,
             question=payload.question,
-            options=[InputPollOption(text=o) for o in payload.options],
+            question_parse_mode=None,
+            description=payload.description or None,
+            options=[
+                InputPollOption(text=o, text_parse_mode=None) for o in payload.options
+            ],
             type=PollType.QUIZ,
             correct_option_id=payload.correct_index,
             explanation=payload.explanation,
@@ -49,8 +64,18 @@ class TelegramPublisher(Publisher):
         return message.message_id
 
     async def _publish_source(self, post: PostEntity, chat_id: int) -> int:
+        """Title in bold, then the text the model wrote, markup and all.
+
+        The text is not escaped - it is Telegram HTML, checked before the draft
+        was ever stored. The title is: it is plain text and may hold an
+        ampersand.
+
+        The link sits inside the text now, but LinkPreviewOptions still names it
+        explicitly. That is what keeps the big card above the post instead of
+        the small preview Telegram would pick on its own.
+        """
         payload = SourcePayload.model_validate(post.payload)
-        text = f"{fmt.quote(payload.title)}\n\n{fmt.quote(payload.text)}"
+        text = f"<b>{fmt.quote(payload.title)}</b>\n\n{payload.text}"
         message = await self.bot.send_message(
             chat_id=chat_id,
             text=text,
