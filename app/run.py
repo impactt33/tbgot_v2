@@ -18,7 +18,7 @@ from main.presentation.middlewares import RoleMiddleware
 FSM_TTL = timedelta(days=1)
 
 async def main() -> None:
-    setup_logging(log_level="DEBUG")
+    setup_logging(log_level="INFO")
     logger = logging.getLogger(__name__)
     logger.info(f"Bot started")
 

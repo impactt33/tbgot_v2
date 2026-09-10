@@ -1,0 +1,22 @@
+# Runtime dependencies, pinned for reproducible builds.
+#
+# Mirrors [project.dependencies] in pyproject.toml, with the versions this was
+# actually built and tested against. pyproject stays the source of truth for
+# what the project needs; this file records what it got. Change one - change
+# the other, or the container will drift from the checkout.
+#
+# Transitive dependencies are resolved by pip and deliberately not listed: a
+# full freeze would be a lock file, and there is no process here to regenerate
+# one.
+
+aiogram==3.29.1
+alembic==1.18.5
+asyncpg==0.31.0
+dishka==1.10.1
+google-genai==2.11.0
+httpx==0.28.1
+pydantic==2.13.4
+pydantic-settings==2.14.2
+redis==8.0.1
+SQLAlchemy[asyncio]==2.0.51
+tenacity==9.1.4

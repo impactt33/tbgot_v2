@@ -1,58 +1,86 @@
 services:
+  bot:
+    build: .
+    container_name: tbgot_bot
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # The bot now actually receives SIGTERM, and it has a container, a Redis
+    # connection and a bot session to close. Ten seconds is the default and can
+    # be tight for that.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   postgres:
-    image: postgres:latest
-    container_name: telegram_bot_container
+    image: postgres:17-alpine
+    container_name: tbgot_postgres
     environment:
-      POSTGRES_USER: postgres_user
-      POSTGRES_PASSWORD: postgres_password
-      POSTGRES_DB: postgres_db
+      # Same names the bot reads, so .env holds one set of credentials instead
+      # of two that can drift apart.
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
       PGDATA: /var/lib/postgresql/data/pgdata
-    ports:
-      - "5430:5432"
     volumes:
-      - ./pgdata:/var/lib/postgresql/data/pgdata
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5430:5432"
+    command: >
+      postgres -c max_connections=100
+               -c shared_buffers=256MB
+               -c effective_cache_size=768MB
+               -c maintenance_work_mem=64MB
+               -c checkpoint_completion_target=0.9
+               -c wal_buffers=16MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    command: >
-      postgres -c max_connections=1000
-                     -c shared_buffers=256MB
-                     -c effective_cache_size=768MB
-                     -c maintenance_work_mem=64MB
-                     -c checkpoint_completion_target=0.7
-                     -c wal_buffers=16MB
-                     -c default_statistics_target=100
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres_user -d postgres_db" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    restart: unless-stopped
-    tty: true
-    stdin_open: true
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
-    container_name: telegram_bot_redis
-    ports:
-      - "6379:6379"
+    container_name: tbgot_redis
     volumes:
       - redisdata:/data
-    command: redis-server --appendonly yes
+    # volatile-lru, not the default noeviction: at the limit noeviction starts
+    # refusing writes, and the bot would stop being able to save FSM state at
+    # all. Everything here has a TTL, so evicting the oldest is the right loss.
+    command: >
+      redis-server --appendonly yes
+                   --maxmemory 256mb
+                   --maxmemory-policy volatile-lru
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:
-    driver: local
   redisdata:
-    driver: local
