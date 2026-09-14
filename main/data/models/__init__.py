@@ -5,5 +5,7 @@ from .post_model import Post
 from .source_model import Source
 from .material_model import Material
 from .post_template_model import PostTemplate
+from .material_reminder_model import MaterialReminder
 
-__all__ = ["User", "Channel", "QuizTopic", "Post", "Source", "Material", "PostTemplate"]
+__all__ = ["User", "Channel", "QuizTopic", "Post", "Source", "Material", "PostTemplate",
+           "MaterialReminder"]

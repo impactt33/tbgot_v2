@@ -17,6 +17,10 @@ def main_menu_keyboard(role: UserRole) -> InlineKeyboardMarkup:
         text="Scheduled posts",
         callback_data=MenuCB(action=MenuAction.SCHEDULED)
     )
+    builder.button(
+        text="Reminders",
+        callback_data=MenuCB(action=MenuAction.REMINDERS)
+    )
 
     if role is UserRole.ADMIN:
         builder.button(

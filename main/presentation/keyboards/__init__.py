@@ -7,3 +7,5 @@ from .main_menu import admin_menu_keyboard, back_to_menu_keyboard, main_menu_key
 from .scheduled import scheduled_posts_keyboard
 from .post import channels_keyboard, post_types_keyboard, draft_actions_keyboard, retry_keyboard, \
     schedule_preset_keyboard, back_to_draft_keyboard, custom_channels_keyboard
+from .reminders import back_to_reminder_keyboard, interval_keyboard, reminder_channels_keyboard, \
+    reminder_keyboard, working_hours_keyboard

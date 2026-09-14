@@ -1,4 +1,5 @@
 from core.errors import AppError
+from main.domain.services.material_reminder_service import MAX_INTERVAL_HOURS, MIN_INTERVAL_HOURS
 
 
 class TimeInputError(AppError):
@@ -67,3 +68,24 @@ class PostInputTooManyPhotosError(PostInputError):
             f"There are too many photos ({length} from allowed {limit}) in your post."
         )
         super().__init__(f"Custom post has too many photos: {length} > {limit}.")
+
+class ReminderInputError(AppError):
+    """A reminder setting typed by hand could not be used."""
+
+class ReminderIntervalInputError(ReminderInputError):
+    user_message = (
+        f"Send the interval as a whole number of hours, from {MIN_INTERVAL_HOURS} "
+        f"to {MAX_INTERVAL_HOURS}. For example: 8"
+    )
+
+class WorkingHoursInputError(ReminderInputError):
+    user_message = (
+        "I didn't understand the hours. Send the start and the end, for example "
+        "9-23 or 09:30-22:00."
+    )
+
+class WorkingHoursEmptyError(WorkingHoursInputError):
+    user_message = (
+        "The start and the end are the same time. For no limit at all, pick "
+        "Around the clock instead."
+    )

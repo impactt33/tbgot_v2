@@ -83,7 +83,7 @@ aiogram, alembic, dishka, pydantic — их API меняются, и точно�
   Финальный тянуть сборкой python-build-standalone.
 - **Docker-демона может не быть.** Тогда Postgres поднимается напрямую (`initdb`
   под пользователем `postgres`, порт 5430), Redis — `redis-server --port 6379`.
-- Нужен `app/.env` (он в `.gitignore`) со всеми переменными из
+- Нужен `.env` (он в `.gitignore`) со всеми переменными из
   `core/config/settings.py`, включая `REDIS_*`. Без него падает импорт
   `core.config`: `settings = Settings()` выполняется на уровне модуля.
 - Для проверок заводи отдельную базу, рабочую не трогай.

@@ -181,7 +181,7 @@ json: {"q": query, "num": limit}
 
 ## Ключи
 
-`GEMINI_API_KEY` и `SERPER_API_KEY` — в `app/.env`, обязательные поля
+`GEMINI_API_KEY` и `SERPER_API_KEY` — в `../.env`, обязательные поля
 `Settings`. Без них не импортируется `core.config`.
 
 Живые вызовы вынесены в `tests/test_live_clients.py` под маркером `live`, который

@@ -20,9 +20,15 @@ logger = logging.getLogger(__name__)
 
 MENU_TEXT = "What do you want to do?"
 NO_ACCESS_TEXT = "You don't have access yet. Ask an admin (@Immpactt) to grant you rights."
+CANCELLED_TEXT = "Cancelled."
 
 @command_router.message(CommandStart()) #type: ignore
-async def command_start(message: types.Message, role: UserRole, user_service: FromDishka[UserService]):
+async def command_start(
+    message: types.Message,
+    state: FSMContext,
+    role: UserRole,
+    user_service: FromDishka[UserService]
+):
     logger.debug(f"User %s started a bot", message.from_user.id)
 
     new_user = await user_service.get_or_create_user(
@@ -44,19 +50,26 @@ async def command_start(message: types.Message, role: UserRole, user_service: Fr
         await message.answer(f"{greeting}\n\n{NO_ACCESS_TEXT}")
         return
 
+    await _leave_state(message, state)
     await message.answer(greeting)
     await message.answer(MENU_TEXT, reply_markup=main_menu_keyboard(new_user.user.role))
 
 @command_router.message(Command("menu")) # type: ignore
-async def command_menu(message: types.Message, role: UserRole):
+async def command_menu(message: types.Message, state: FSMContext, role: UserRole):
     if role is UserRole.NONE:
         await message.answer(NO_ACCESS_TEXT)
         return
 
+    await _leave_state(message, state)
     await message.answer(MENU_TEXT, reply_markup=main_menu_keyboard(role))
 
 @command_router.message(Command("admin")) #type: ignore
-async def command_admin(message: types.Message, role: UserRole, user_service: FromDishka[UserService]):
+async def command_admin(
+    message: types.Message,
+    state: FSMContext,
+    role: UserRole,
+    user_service: FromDishka[UserService]
+):
     """Shortcut straight into the management submenu."""
     logger.info(f"User {message.from_user.id} entered admin mode")
 
@@ -64,6 +77,7 @@ async def command_admin(message: types.Message, role: UserRole, user_service: Fr
         await message.answer("Oops, you don't have permission to do that.")
         return
 
+    await _leave_state(message, state)
     await message.answer("Bot management:", reply_markup=admin_menu_keyboard())
 
 @command_router.message(Command("self_info")) # type: ignore
@@ -80,5 +94,20 @@ async def command_quit(message: types.Message, state: FSMContext, role: UserRole
     """
 
     await state.clear()
-    await message.answer("Cancelled.", reply_markup=ReplyKeyboardRemove())
+    await message.answer(CANCELLED_TEXT, reply_markup=ReplyKeyboardRemove())
     await message.answer(MENU_TEXT, reply_markup=main_menu_keyboard(role))
+
+async def _leave_state(message: types.Message, state: FSMContext) -> None:
+    """Leave whatever flow was in progress, the way /quit does.
+
+    A menu command is a way out. A state that outlives it turns the next
+    unrelated message into input for a screen that is long gone (defect 4),
+    and it holds material reminders back. A channel picker may still be
+    showing its reply keyboard, and only a message can take that away - hence
+    the separate "Cancelled." whenever there was something to cancel.
+    """
+    if await state.get_state() is None:
+        return
+
+    await state.clear()
+    await message.answer(CANCELLED_TEXT, reply_markup=ReplyKeyboardRemove())

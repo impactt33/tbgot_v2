@@ -5,3 +5,4 @@ from .post_repo import PostRepo
 from .source_repo import SourceRepo
 from .material_repo import MaterialRepo
 from .post_template_repo import PostTemplateRepo
+from .material_reminder_repo import MaterialReminderRepo

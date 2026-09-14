@@ -15,6 +15,7 @@ class MenuAction(str, Enum):
     ADD_CHANNEL = "add_channel"
     REMOVE_CHANNEL = "remove_channel"
     SETUP_CHANNEL = "setup_channel"
+    REMINDERS = "reminders"
 
 
 class MenuCB(CallbackData, prefix="menu"):

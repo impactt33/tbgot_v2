@@ -4,3 +4,4 @@ from .publish_post import PublishPostUseCase, PreviewPostUseCase
 from .change_user_role import ChangeUserRoleUseCase
 from .discard_draft import DiscardDraftUseCase
 from .generate_material import GenerateMaterialPostUseCase, RegenerateMaterialTextUseCase
+from .check_material_readiness import CheckMaterialReadinessUseCase

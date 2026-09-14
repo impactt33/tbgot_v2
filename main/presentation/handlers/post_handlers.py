@@ -12,12 +12,11 @@ from core.errors import AppError
 from main.domain.entities import QuizTopicEntity, QuizPayload, SourceEntity, SourcePayload, \
     MaterialPayload
 from main.domain.enums import PostType, UserRole
-from main.domain.errors import PostNotScheduledError, UnsupportedPostTypeError, \
-    StorageChannelNotSetError
-from main.domain.services import ChannelService, PostService, PostTemplateService, \
-    QuizTopicService, SourceService
+from main.domain.errors import PostNotScheduledError, UnsupportedPostTypeError
+from main.domain.services import ChannelService, PostService, QuizTopicService, SourceService
 from main.domain.use_cases import GenerateQuizUseCase, GenerateSourcePostUseCase, PreviewPostUseCase, \
-    PublishPostUseCase, DiscardDraftUseCase, GenerateMaterialPostUseCase, RegenerateMaterialTextUseCase
+    PublishPostUseCase, DiscardDraftUseCase, GenerateMaterialPostUseCase, RegenerateMaterialTextUseCase, \
+    CheckMaterialReadinessUseCase
 from main.domain.use_cases.create_custom_post import CreateCustomPostUseCase, CreateCustomPostRequest
 from main.domain.use_cases.generate_material import CreateMaterialPostRequest
 from main.domain.use_cases.generate_quiz import GenerateQuizRequest
@@ -129,7 +128,7 @@ async def ask_for_material_post(
     callback_data: GenerateCB,
     state: FSMContext,
     channel_service: FromDishka[ChannelService],
-    template_service: FromDishka[PostTemplateService]
+    check_readiness: FromDishka[CheckMaterialReadinessUseCase]
 ) -> None:
     """A material post is assembled from what the admin sends, not generated.
 
@@ -140,12 +139,9 @@ async def ask_for_material_post(
     """
     channel = await channel_service.get_channel_by_id(callback_data.channel_id)
 
-    if channel.storage_channel_id is None:
-        raise StorageChannelNotSetError(channel.channel_id)
-
-    # Raises NotEnoughExamplesError. Only the check happens here; the use case
-    # fetches the template again when it comes to generating.
-    await template_service.get_for_generation(callback_data.channel_id, PostType.MATERIAL)
+    # Raises StorageChannelNotSetError, or a template error when the channel is
+    # short of examples. The reminders list marks channels by the same check.
+    await check_readiness(channel)
 
     if not isinstance(callback.message, Message):
         await callback.answer(MENU_TOO_OLD_TEXT, show_alert=True)

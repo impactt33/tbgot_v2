@@ -6,6 +6,7 @@ from .payloads import QuizPayload, SourcePayload, CustomPayload, MaterialPayload
 from .source_entity import SourceEntity, AddSourceEntity
 from .material_entity import MaterialEntity, AddMaterialEntity
 from .post_template_entity import PostTemplateEntity
+from .material_reminder_entity import MaterialReminderEntity, AddMaterialReminderEntity
 
 __all__ = [
     "UserEntity",
@@ -26,5 +27,7 @@ __all__ = [
     "material_url",
     "MaterialEntity",
     "AddMaterialEntity",
-    "PostTemplateEntity"
+    "PostTemplateEntity",
+    "MaterialReminderEntity",
+    "AddMaterialReminderEntity"
 ]

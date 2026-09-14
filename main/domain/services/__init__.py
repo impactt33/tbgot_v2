@@ -5,3 +5,4 @@ from .post_service import PostService
 from .source_service import SourceService
 from .material_service import MaterialService
 from .post_template_service import PostTemplateService
+from .material_reminder_service import MaterialReminderService

@@ -4,7 +4,7 @@
 # otherwise end up baked into an image layer, readable by anyone who pulls it.
 .env
 .env.*
-**/.env
+.env
 
 # Virtualenv and caches - 268 MB of them, and none of it is portable anyway.
 .venv/

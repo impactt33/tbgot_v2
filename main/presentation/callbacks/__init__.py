@@ -5,3 +5,5 @@ from .schedule import SchedulePreset, ScheduleCB
 from .custom_post import CustomChannelCB
 from .channel_setup import SetupChannelCB, StorageAction, StorageCB
 from .templates import TemplateAction, TemplateCB, TemplateRemoveExampleCB, TemplateTypesCB
+from .reminders import ReminderAction, ReminderChannelCB, ReminderHoursCB, ReminderIntervalCB, \
+    ReminderSetupCB, WorkingHoursPreset

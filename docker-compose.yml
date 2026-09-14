@@ -1,27 +1,7 @@
 services:
-  bot:
-    build: .
-    container_name: tbgot_bot
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    # The bot now actually receives SIGTERM, and it has a container, a Redis
-    # connection and a bot session to close. Ten seconds is the default and can
-    # be tight for that.
-    stop_grace_period: 30s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   postgres:
-    image: postgres:17-alpine
-    container_name: tbgot_postgres
+    image: postgres:18
+    container_name: tgbot_postgres
     environment:
       # Same names the bot reads, so .env holds one set of credentials instead
       # of two that can drift apart.
@@ -30,7 +10,7 @@ services:
       POSTGRES_DB: ${DB_NAME}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql/data/pgdata
     ports:
       - "127.0.0.1:5430:5432"
     command: >
@@ -59,7 +39,9 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: tbgot_redis
+    container_name: tgbot_redis
+    ports:
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     # volatile-lru, not the default noeviction: at the limit noeviction starts
@@ -82,5 +64,4 @@ services:
         max-file: "3"
 
 volumes:
-  pgdata:
   redisdata:

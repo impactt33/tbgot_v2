@@ -2,7 +2,7 @@ from dishka import Provider, Scope, provide
 
 from main.domain.use_cases import GenerateSourcePostUseCase, GenerateQuizUseCase, PublishPostUseCase, \
     PreviewPostUseCase, ChangeUserRoleUseCase, DiscardDraftUseCase, GenerateMaterialPostUseCase, \
-    RegenerateMaterialTextUseCase
+    RegenerateMaterialTextUseCase, CheckMaterialReadinessUseCase
 from main.domain.use_cases.create_custom_post import CreateCustomPostUseCase
 
 
@@ -18,3 +18,4 @@ class UseCaseProvider(Provider):
     create_custom_post = provide(CreateCustomPostUseCase)
     generate_material = provide(GenerateMaterialPostUseCase)
     regenerate_material = provide(RegenerateMaterialTextUseCase)
+    check_material_readiness = provide(CheckMaterialReadinessUseCase)
